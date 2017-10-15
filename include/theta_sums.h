@@ -30,7 +30,7 @@ const int max_j = 30;
 //const int mpfr_Kmin = 2000;
 
 
-inline std::complex<double> I_power(int n) {
+inline __attribute__((always_inline)) std::complex<double> I_power(int n) {
     std::complex<double> S = 0;
     switch(n % 4) {
         case 0:
@@ -49,7 +49,7 @@ inline std::complex<double> I_power(int n) {
     return S;
 }
 
-inline std::complex<double> minus_I_power(int n) {
+inline __attribute__((always_inline)) std::complex<double> minus_I_power(int n) {
     std::complex<double> S = 0.0;
     switch(n % 4) {
         case 0:
@@ -68,7 +68,7 @@ inline std::complex<double> minus_I_power(int n) {
     return S;
 }
 
-inline int minus_one_power(int n) {
+inline __attribute__((always_inline)) int minus_one_power(int n) {
     int S = 0;
     switch(n % 2) {
         case 0:
@@ -81,7 +81,7 @@ inline int minus_one_power(int n) {
     return S;
 }
 
-inline std::complex<double> exp_i_pi4(int n) {
+inline __attribute__((always_inline)) std::complex<double> exp_i_pi4(int n) {
     //
     // Return exp( n * I * PI / 4)
     //
@@ -117,7 +117,7 @@ inline std::complex<double> exp_i_pi4(int n) {
 }
 
 
-inline std::complex<double> exp_minus_i_pi4(int n) {
+inline __attribute__((always_inline)) std::complex<double> exp_minus_i_pi4(int n) {
     //
     // Return exp(-n * I * PI /4)
     //
@@ -173,11 +173,11 @@ typedef struct{
 
 
 
-inline double K_power(int l, const theta_cache * cache) {
+inline __attribute__((always_inline)) double K_power(int l, const theta_cache * cache) {
     return * ( (double *)((intptr_t)(cache) + sizeof(theta_cache) + (cache->j + l) * sizeof(double) ));
 }
 
-inline double root_2pi_b_power(int l, const theta_cache * cache) {
+inline __attribute__((always_inline)) double root_2pi_b_power(int l, const theta_cache * cache) {
     return * ( (double *)((intptr_t)(cache) + sizeof(theta_cache) + (3 * cache->j + 2 + l) * sizeof(double) ));
 }
 
@@ -193,7 +193,7 @@ std::complex<double> ExpABK(mpfr_t A, mpfr_t B, int K);
 
 
 
-inline std::complex<double> EXP(std::complex<double> z) {                                                 //--------------------------------------------
+inline __attribute__((always_inline)) std::complex<double> EXP(std::complex<double> z) {                                                 //--------------------------------------------
                                                                                 // This is just here for counting purposes.
     /*
     static __thread double rlast = 0.0;
@@ -212,7 +212,7 @@ inline std::complex<double> EXP(std::complex<double> z) {                       
 }                                                                               // and commenting out the first line of this
                                                                                 // function will get rid of any overhead at all.
                                                                                 // ---------------------------------------------
-inline double EXP(double z) {
+inline __attribute__((always_inline)) double EXP(double z) {
     /*
     static __thread double last = 0.0;
     static __thread unsigned long total = 0;
@@ -230,7 +230,7 @@ inline double EXP(double z) {
 }
 
 
-inline bool check_condition(bool condition, char * message) {              //----------------------------------------------
+inline __attribute__((always_inline)) bool check_condition(bool condition, char * message) {              //----------------------------------------------
     if(!condition) {                                                            //
         std::cout << "WARNING: " << message << std::endl;                       //
     }                                                                           //
@@ -270,7 +270,7 @@ std::complex<double> J_Integral_1(double a, double b, int j, int M, int K, theta
 std::complex<double> H_Integral_2(int j, double a1, double a2, double epsilon);                                   //
 std::complex<double> J_Integral_2(double a1, double a2, double b, theta_cache * cache, double epsilon);           //--------------------
 
-inline std::complex<double> JBulk(double a, double b, int j, int M, int K, theta_cache * cache, double epsilon) {
+inline __attribute__((always_inline)) std::complex<double> JBulk(double a, double b, int j, int M, int K, theta_cache * cache, double epsilon) {
     double x = epsilon/2;
     std::complex<double> A = J_Integral_0(a, b, j, M, K, cache, x);
     std::complex<double> B = J_Integral_1(a, b, j, M, K, cache, x);
@@ -280,7 +280,7 @@ inline std::complex<double> JBulk(double a, double b, int j, int M, int K, theta
 void JBulk(std::complex<double> * J, double a, double b, int j, int M, int K, theta_cache * cache, double * epsilon);
 void JBoundary(std::complex<double> * J, double a1, double a2, double b, int j, int K, theta_cache * cache, double * epsilon);
 
-inline std::complex<double> JBoundary(double a1, double a2, double b, int j, int K, theta_cache * cache, double epsilon){ 
+inline __attribute__((always_inline)) std::complex<double> JBoundary(double a1, double a2, double b, int j, int K, theta_cache * cache, double epsilon){ 
     if(j == 0) {
         double x = epsilon * .33333333333333333333;
         return J_Integral_2(a1, a2, b, cache, x)                                    
@@ -301,8 +301,8 @@ inline std::complex<double> JBoundary(double a1, double a2, double b, int j, int
 std::complex<double> IC0(int j, mpfr_t mp_a, mpfr_t mp_b, const theta_cache * cache, double epsilon);
 std::complex<double> IC1(int K, int j, double a, double b, const theta_cache * cache, double epsilon);//----------------------------------------------
 std::complex<double> IC1c(int K, int j, double a, double b, std::complex<double> C8, const theta_cache * cache, double epsilon);     //
-inline std::complex<double> IC3(int K, int j, double a, double b, const theta_cache * cache, double epsilon);           //
-inline std::complex<double> IC3c(int K, int j, double a, double b, const theta_cache * cache, double epsilon);          //
+inline __attribute__((always_inline)) std::complex<double> IC3(int K, int j, double a, double b, const theta_cache * cache, double epsilon);           //
+inline __attribute__((always_inline)) std::complex<double> IC3c(int K, int j, double a, double b, const theta_cache * cache, double epsilon);          //
 std::complex<double> IC4(int K, int j, double a, double b, std::complex<double> C11, const theta_cache * cache, double epsilon);     //
 std::complex<double> IC4c(int K, int j, double a, double b, std::complex<double> C11, const theta_cache * cache, double epsilon);    //
 std::complex<double> IC5(int K, int j, double a, double b, const theta_cache * cache, double epsilon);                  //
@@ -312,26 +312,26 @@ std::complex<double> IC7_method1(int K, int j, double a, double b, const theta_c
 std::complex<double> IC7star(double a, int j, double epsilon);                  //
 std::complex<double> IC8(int K, int j, mpfr_t mp_a, mpfr_t mp_b, const theta_cache * cache);                            //
 std::complex<double> IC9E(int K, int j, double a, double b, const theta_cache * cache, double epsilon);                 //
-inline std::complex<double> IC9H(int K, int j, double a, double b, const theta_cache * cache, double epsilon);          //
+inline __attribute__((always_inline)) std::complex<double> IC9H(int K, int j, double a, double b, const theta_cache * cache, double epsilon);          //
                                                                                 //  (Defined in ICn.cc, unless defined inline below)
                                                                                 //
                                                                                 //
 
-inline std::complex<double> IC3(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
+inline __attribute__((always_inline)) std::complex<double> IC3(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
     // needs a <= 0
     //       b >= 0
     //return pow(-I, j+1) * IC9H(K, j, -a, b, cache, epsilon);
     return minus_I_power(j+1) * IC9H(K, j, -a, b, cache, epsilon);
 }
 
-inline std::complex<double> IC3c(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
+inline __attribute__((always_inline)) std::complex<double> IC3c(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
     // needs a >= 0
     //       b >= 0
     //return pow(I, j+1) * IC9H(K, j, a, b, cache, epsilon);
     return I_power(j+1) * IC9H(K, j, a, b, cache, epsilon);
 }
 
-inline std::complex<double> IC9H(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
+inline __attribute__((always_inline)) std::complex<double> IC9H(int K, int j, double a, double b, const theta_cache * cache, double epsilon) {
     //
     // Compute the integral (1/K^j)int_0^\infty t^j exp(-2 pi a t - 2 pi i b t^2)
     //
@@ -389,7 +389,7 @@ int normalize(mpfr_t a, mpfr_t b);
 std::complex<double> direct_exponential_sum_evaluation2(mpfr_t a, mpfr_t b, int j, int m, int M);
 
 
-inline std::complex<double> compute_C11(mpfr_t a, mpfr_t b, int K) {
+inline __attribute__((always_inline)) std::complex<double> compute_C11(mpfr_t a, mpfr_t b, int K) {
     //
     // Compute C11 = I exp(2 pi i K a + 2 pi i b K^2)
     //
@@ -416,7 +416,7 @@ inline std::complex<double> compute_C11(mpfr_t a, mpfr_t b, int K) {
     return I * S;
 }
 
-inline std::complex<double> compute_C12(mpfr_t mp_a, mpfr_t mp_b, int K) {
+inline __attribute__((always_inline)) std::complex<double> compute_C12(mpfr_t mp_a, mpfr_t mp_b, int K) {
     std::complex<double> z = ExpBK(mp_b, K);
     double a = mpfr_get_d(mp_a, GMP_RNDN);
     double b = mpfr_get_d(mp_b, GMP_RNDN);

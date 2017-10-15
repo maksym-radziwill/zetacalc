@@ -39,7 +39,7 @@ static int fastlog2(double x) {
 
 
 
-inline int fastlog(double x) {
+inline __attribute__((always_inline)) int fastlog(double x) {
     //
     // return an approximation to the floor
     // of the log (base e) of x

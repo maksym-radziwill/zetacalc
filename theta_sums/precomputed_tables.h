@@ -176,7 +176,7 @@ const Double factorial_table[factorial_table_range] = {
 4.2690680090047052749392518888996e304};
 
 
-inline Double factorial(int n) {
+inline __attribute__((always_inline)) Double factorial(int n) {
     if(SKIP_RANGE_CHECK || n < factorial_table_range) {
         return factorial_table[n];
     }
@@ -398,7 +398,7 @@ const Double bernoulli_table[bernoulli_range] = {
 0.00000000000000000000000000000000};
 
 
-inline Double bernoulli(int n) {
+inline __attribute__((always_inline)) Double bernoulli(int n) {
     if(SKIP_RANGE_CHECK || n < bernoulli_range) {
         return bernoulli_table[n];
     }
@@ -611,7 +611,7 @@ const Double two_pi_powers[two_pi_power_table_range] = {
 6.8832541180598397480141057339707e158};
 
 
-inline Double two_pi_power(int n) {
+inline __attribute__((always_inline)) Double two_pi_power(int n) {
     if(SKIP_RANGE_CHECK || n < two_pi_power_table_range) {
         return two_pi_powers[n];
     }
@@ -829,7 +829,7 @@ const Double two_pi_over_factorial_table[two_pi_over_factorial_table_range] = {
 1.7455615173305608891037393949649e-214};
 
 
-inline Double two_pi_over_factorial_power(int n) {
+inline __attribute__((always_inline)) Double two_pi_over_factorial_power(int n) {
     // return (2 pi)^n / n! using table lookup for n < 100
     if(SKIP_RANGE_CHECK || n < two_pi_over_factorial_table_range) {
         return two_pi_over_factorial_table[n];
@@ -1044,7 +1044,7 @@ const Double factorial_over_twopi_power_table[factorial_over_twopi_power_table_r
 5.7288155706438374875427704084639e213};
 
 
-inline Double factorial_over_twopi_power(int n) {
+inline __attribute__((always_inline)) Double factorial_over_twopi_power(int n) {
     // return (2 pi)^n / n! using table lookup for n < 100
     if(SKIP_RANGE_CHECK || n < factorial_over_twopi_power_table_range) {
         return factorial_over_twopi_power_table[n];
@@ -1259,7 +1259,7 @@ const Double bernoulli_over_factorial_table[bernoulli_over_factorial_table_range
 0.00000000000000000000000000000000};
 
 
-inline Double bernoulli_over_factorial(int n) {
+inline __attribute__((always_inline)) Double bernoulli_over_factorial(int n) {
     // return B_n / n! using table lookup;
     if(SKIP_RANGE_CHECK || n < bernoulli_over_factorial_table_range) {
         return bernoulli_over_factorial_table[n];
@@ -2174,7 +2174,7 @@ const Double exp_t_over_N_squared_table[exp_t_over_N_squared_range][exp_t_over_N
 -1.0}};
 
 
-inline Double exp_t_over_N_squared(int t, int N) {
+inline __attribute__((always_inline)) Double exp_t_over_N_squared(int t, int N) {
     if(SKIP_RANGE_CHECK || N < exp_t_over_N_squared_range) {
         return exp_t_over_N_squared_table[N][t];
     }
@@ -2518,7 +2518,7 @@ const Double gamma_s_over_2_table[gamma_s_over_2_range] = {
 2.5649307433687542701168405519536e292};
 
 
-inline Double gamma_s_over_2(int s) {
+inline __attribute__((always_inline)) Double gamma_s_over_2(int s) {
     if(SKIP_RANGE_CHECK || s < gamma_s_over_2_range) {
         return gamma_s_over_2_table[s];
     }
@@ -12532,7 +12532,7 @@ const Double binomial_table[binomial_range][binomial_range] = {
 1.0000000000000000000000000000000}};
 
 
-inline Double binomial_coefficient(int n, int m) {
+inline __attribute__((always_inline)) Double binomial_coefficient(int n, int m) {
     if(SKIP_RANGE_CHECK || (n < binomial_range && m <= n)) {
         return binomial_table[n][m];
     }
@@ -22547,7 +22547,7 @@ const Double inverse_binomial_table[inverse_binomial_range][inverse_binomial_ran
 1.0000000000000000000000000000000}};
 
 
-inline Double inverse_binomial_coefficient(int n, int m) {
+inline __attribute__((always_inline)) Double inverse_binomial_coefficient(int n, int m) {
     if(SKIP_RANGE_CHECK || (n < inverse_binomial_range && m <= n)) {
         return inverse_binomial_table[n][m];
     }
@@ -23062,7 +23062,7 @@ const Double inverse_table[inverse_range] = {
 0.0020040080160320641282565130260532};
 
 
-inline Double inverse(int n) {
+inline __attribute__((always_inline)) Double inverse(int n) {
     if(n < inverse_range) {
         return inverse_table[n];
     }

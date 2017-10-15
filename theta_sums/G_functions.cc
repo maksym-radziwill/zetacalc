@@ -359,14 +359,14 @@ complex<double> G_method1_I_over_twopi(complex<double> alpha, int n, int j, doub
     return S;
 }
 
-inline double POW(double a, double b) {
+inline __attribute__((always_inline)) double POW(double a, double b) {
     if(a == 0 && b == 0) {
         return 1;
     }
     return pow(a, b);
 }
 
-inline complex<double> g(complex<double> alpha, complex<double> b, double n, double j, double t) {
+inline __attribute__((always_inline)) complex<double> g(complex<double> alpha, complex<double> b, double n, double j, double t) {
     return POW(t + n, j) * EXP(2 * PI * I * t * (alpha + b * t) );
 }
 
@@ -926,5 +926,5 @@ complex<double> G_via_Euler_MacLaurin_I_over_twopi(complex<double> alpha, int n,
 // I'm getting segfaults if this file doesn't have a call to fastlog2() for
 // some reason. Seems like a compiler bug...
 void this_is_stupid() {
-    int a = fastlog2(2.0);
+  fastlog2(2.0);
 }

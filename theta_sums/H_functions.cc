@@ -24,13 +24,13 @@ using namespace std;
 
 
 
-inline double real(double x) {
+inline __attribute__((always_inline)) double real(double x) {
     return x;
 }
-inline double imag(double x) {
+inline __attribute__((always_inline)) double imag(double x) {
     return 0;
 }
-inline double norm(double x) {
+inline __attribute__((always_inline)) double norm(double x) {
     return x * x;
 }
 template<typename T> complex<double> H(int j, T alpha, double epsilon);
@@ -38,8 +38,8 @@ template complex<double> H<complex<double>>(int j, complex<double> alpha, double
 template complex<double> H<double>(int j, double alpha, double epsilon);
 
 template<typename T> complex<double> H_method1(int j, T alpha);
-inline complex<double> H_method1_I(int j, double alpha);
-template<typename T> inline T H_method2(int j, T alpha, double epsilon);
+inline __attribute__((always_inline)) complex<double> H_method1_I(int j, double alpha);
+template<typename T> inline __attribute__((always_inline)) T H_method2(int j, T alpha, double epsilon);
 template<typename T> T H_method4(int j, T alpha, double epsilon);
 
 template <typename T> complex<double> H_method1(int j, T alpha) {
@@ -73,7 +73,7 @@ template <typename T> complex<double> H_method1(int j, T alpha) {
     return S;
 }
 
-inline complex<double> H_method1_I(int j, double alpha) {
+inline __attribute__((always_inline)) complex<double> H_method1_I(int j, double alpha) {
     // In this case we compute an "exact" value using the antiderivative of the integrand.
     // 
     // Specialized for imaginary alpha. Here alpha has an implicit I multiplying it.
@@ -98,7 +98,7 @@ inline complex<double> H_method1_I(int j, double alpha) {
     return S;
 }
 
-template<typename T> inline T H_method2(int j, T alpha, double epsilon) {
+template<typename T> inline __attribute__((always_inline)) T H_method2(int j, T alpha, double epsilon) {
     // When alpha is very small, using the antiderivative can lead to bad
     // cancellation and loss of precision, so we use the taylor series
     // expansion for exp(2 pi alpha t) instead, and integrate term by term

@@ -1,3 +1,13 @@
+#include "config.h"
+#if HAVE_CUDA
+#include <cuComplex.h>
+#include <cuda_runtime.h>
+#endif
+#include <string>
+
+#define STAGE2_PRECISION (Double) exp(-40.0)
+#define STAGE3_PRECISION (Double) exp(-10.0)
+
 namespace verbose {
     const int zeta_sum = 1;
     const int zeta_block = 0;
@@ -32,10 +42,14 @@ void compute_Z_from_rs_sum(mpfr_t t0, double delta, int N, Complex * S, Complex 
 // only concerned with the _main sum_ here, and not yet with computing zeta. 
 
 
-Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, double delta, int M, Complex * S, int Kmin, int number_of_threads = 2, int fraction = -1, int verbose=1);
+Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, double & delta, int & M, Complex * S, int Kmin, int number_of_threads, int number_of_gpu_threads, int gpus=1, std::string filename = "");
 
 Complex zeta_block_stage1(mpz_t v, unsigned int K, mpfr_t t, Double delta, int M, Complex * S);
-Complex zeta_block_stage2(mpz_t n, unsigned int N, mpfr_t t, Double delta, int M, Complex * S);
+/* The Complex return value was never used */
+#if HAVE_CUDA
+int zeta_block_stage2(mpz_t v0, unsigned int N, mpfr_t t, Double delta, int M, Complex * S, struct precomputation_table ** , cuDoubleComplex ** , struct precomputation_table ** , cuDoubleComplex ** , Complex ** , int, cudaStream_t , int, pthread_mutex_t *, int);
+#endif
+
 Complex zeta_block_stage3(mpz_t n, unsigned int N, mpfr_t t, Complex Z[30], Double delta, int M, Complex * S, int Kmin = 0);
 
 Complex zeta_block_stage2_basic(mpz_t v, unsigned int *K, mpfr_t t, Double epsilon);

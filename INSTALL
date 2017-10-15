@@ -1,0 +1,27 @@
+To install run first
+
+   sudo apt-get install nvidia-cuda-toolkit libmpfr-dev
+
+If planning on using MPI then install whatever version of
+MPI is appropriate. Note that it has to match on the computers
+that will be part of the MPI cluster. 
+
+To compile type the standard
+
+   ./configure
+   make
+
+For help type ./zetacalc --help
+If running with mpi then run
+
+   mpirun ./zetacalc [your options]
+
+instead of
+
+   ./zetacalc [your options]
+
+For maximum performance one should play with the options
+--number_of_cpu_threads and --number_of_gpu_threads .
+Those parameters should be selected in such a way so that
+the utilization of the GPU is maximized, as shown by the
+command nvidia-smi while running the program

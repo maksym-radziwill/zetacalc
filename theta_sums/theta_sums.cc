@@ -38,7 +38,9 @@ Complex compute_exponential_sums(mpfr_t mp_a, mpfr_t mp_b, int j, int K, Complex
     b = mpfr_get_d(mp_b, GMP_RNDN);
    
     int q = to_int(a + 2 * b * K); // note that a and b will always be positive, so this will do the right thing.
-    int p = to_int(ceil(a));
+
+    // This variable was unused? 
+    //    int p = to_int(ceil(a));
 
     //cout << "compute exponential sums called with" << endl
     //    << "a = " << a << endl

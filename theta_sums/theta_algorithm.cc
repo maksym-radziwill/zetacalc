@@ -50,10 +50,10 @@ complex<double> compute_exponential_sums_using_theta_algorithm(
     double w1 = ceil(a) - a;
     int p1 = q - p;
 
-    complex<double> z[J+1];
-    complex<double> z2[J+1];
-    double z_epsilon[J+1];
-    double v_epsilon[J+1];
+    complex<double> * z = new complex<double> [J+1];
+    complex<double> * z2 = new complex <double> [J+1];
+    double * z_epsilon = new double [J+1];
+    double * v_epsilon = new double [J+1];
 
     for(int j = 0; j <= J; j++) {
         z[j] = 0.0;
@@ -67,10 +67,10 @@ complex<double> compute_exponential_sums_using_theta_algorithm(
         if(K < v_epsilon[j]) v[j] = 0.0;
     }
 
-    complex<double> jbulk1[J+1];
-    complex<double> jbulk2[J+1];
-    complex<double> jboundary1[J+1];
-    complex<double> jboundary2[J+1];
+    complex<double> * jbulk1 = new complex<double> [J+1];
+    complex<double> * jbulk2 = new complex<double> [J+1];
+    complex<double> * jboundary1 = new complex<double> [J+1];
+    complex<double> * jboundary2 = new complex<double> [J+1];
 
     JBulk(jbulk1, w, b, J, p1, K, cache, z_epsilon);
     JBulk(jbulk2, w1, b, J, p1, K, cache, v_epsilon);
@@ -135,7 +135,7 @@ complex<double> compute_exponential_sums_using_theta_algorithm(
     mpfr_div_2ui(b1, b1, 1, GMP_RNDN);
     mpfr_neg(b1, b1, GMP_RNDN);
 
-    complex<double> v2[J+1];
+    complex<double> * v2 = new complex<double> [J+1];
     compute_subsum_coefficients(v2, v, cache);
     if(p == 1) S -= v2[0];
     free_theta_cache(cache);
@@ -144,6 +144,16 @@ complex<double> compute_exponential_sums_using_theta_algorithm(
 
     S += subsum;
 
+    delete[] z;
+    delete[] z2;
+    delete[] z_epsilon;
+    delete[] v_epsilon;
+    delete[] v2;
+    delete[] jbulk1;
+    delete[] jbulk2;
+    delete[] jboundary1; 
+    delete[] jboundary2;
+    
     return S;
 }
 

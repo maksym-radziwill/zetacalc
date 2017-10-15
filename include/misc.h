@@ -34,15 +34,15 @@ namespace misc {
 //}
 
 
-inline int to_int(int x) {
+inline __attribute__((always_inline)) int to_int(int x) {
     return x;
 }
 
-inline double to_double(double x) {
+inline __attribute__((always_inline)) double to_double(double x) {
     return x;
 }
 
-inline double LOG(double x) {
+inline __attribute__((always_inline)) double LOG(double x) {
     return log(x);
 }
 
