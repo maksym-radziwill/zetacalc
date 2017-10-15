@@ -134,7 +134,7 @@ void stage_3_start(mpz_t v, mpfr_t t) {
   /* We adjusted it to 34*1200 so that t = 10^30 is completely in the 
      range of stage2 sums */
 
-  mpfr_mul_ui(x, x, 340*1200u, GMP_RNDN);  // x = stage_3_start * t^(1/3)
+  mpfr_mul_ui(x, x, 34*1200u, GMP_RNDN);  // x = stage_3_start * t^(1/3)
 
   /* Should carefully decide if the threshold is 10^14 or 10^15 ? */
   
