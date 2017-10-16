@@ -35,8 +35,8 @@ __global__ void kernel
 
      if(threadIdx.x == 0){
      	 block_size = dev_precompute[bid].block_size;
-         number_of_log_terms = dev_precompute[bid].number_of_log_terms;
-         number_of_sqrt_terms = dev_precompute[bid].number_of_sqrt_terms;
+         number_of_log_terms = dev_precompute[bid].size.number_of_log_terms;
+         number_of_sqrt_terms = dev_precompute[bid].size.number_of_sqrt_terms;
      }
 
      __syncthreads();
