@@ -67,11 +67,9 @@ inline __attribute__((always_inline)) void precompute_a_b(mpz_t v,
   //
   // where K is calculated by calling stage_2_block_size.
   //
-
   
-  
-  precompute->size.number_of_log_terms = 0; 
-  precompute->size.number_of_sqrt_terms = 0; 
+  precompute->number_of_log_terms = 0; 
+  precompute->number_of_sqrt_terms = 0; 
   precompute->block_size = 0; 
   
   if(*K == 0 || *K == 1) return;
@@ -106,13 +104,9 @@ inline __attribute__((always_inline)) void precompute_a_b(mpz_t v,
   // t * log(1 + k / v) and -0.5 * log(1 + k / v)
   int number_of_log_terms = (logepsilon - logtt)/logx;
   int number_of_sqrt_terms = logepsilon/logx;
-
-  if(number_of_sqrt_terms > 8 || number_of_log_terms > 8)
-    cout << "Warning : The size of A_TABLE in include/gpu.h needs to be increased beyond 8!" << endl;
- 
   
-  precompute->size.number_of_sqrt_terms = number_of_sqrt_terms;
-  precompute->size.number_of_log_terms = number_of_log_terms;
+  precompute->number_of_sqrt_terms = number_of_sqrt_terms;
+  precompute->number_of_log_terms = number_of_log_terms;
   
   // arrays that will hold auxilliary coefficents in the Taylor expansions
   // of t * log(1 + k / v) and -0.5 * log(1 + k / v)

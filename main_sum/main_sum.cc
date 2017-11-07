@@ -79,7 +79,7 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   //
 
   stage_3_start(v,t);
-  mpz_div_ui(v, v,500000);
+  mpz_div_ui(v, v,5000000);
 
   if(mpz_cmp_ui(v,1100000) < 0) mpz_set_ui(v, 1100000); 
 
