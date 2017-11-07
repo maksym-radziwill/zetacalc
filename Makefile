@@ -1,9 +1,9 @@
 
 
-ARCH=sm_52
-ifneq (/usr/local/bin/mpic++, )
-CC = /usr/local/bin/mpic++
-CXX = /usr/local/bin/mpic++
+ARCH=sm_60
+ifneq (/cvmfs/soft.computecanada.ca/easybuild/software/2017/avx2/CUDA/intel2016.4/cuda8.0/openmpi/2.1.1/bin/mpic++, )
+CC = /cvmfs/soft.computecanada.ca/easybuild/software/2017/avx2/CUDA/intel2016.4/cuda8.0/openmpi/2.1.1/bin/mpic++
+CXX = /cvmfs/soft.computecanada.ca/easybuild/software/2017/avx2/CUDA/intel2016.4/cuda8.0/openmpi/2.1.1/bin/mpic++
 else
 CC = gcc
 CXX = g++
@@ -15,7 +15,7 @@ CXXFLAGS = -m$(BITS) -march=native -Wall -pthread -Winline -O3 -g -std=c++11 -Ii
 H_CXXFLAGS = -m$(BITS) -march=native -Wall -pthread  -O3 -g -std=c++11 -Iinclude 
 
 ifeq (1,1) 
-NVCC = /usr/bin/nvcc
+NVCC = /cvmfs/soft.computecanada.ca/easybuild/software/2017/avx2/Compiler/intel2016.4/cuda/8.0.44/bin/nvcc
 NVCCFLAGS = -arch=$(ARCH) -Xptxas=-v -O3 -D_FORCE_INLINES -Iinclude -Xcompiler -m64  -Xcompiler -fPIC
 else
 NVCC = g++ 
@@ -23,7 +23,7 @@ NVCCFLAGS = -Iinclude -x c
 endif
 
 ifeq (1,1)
-LDXXX = /usr/local/bin/mpic++
+LDXXX = /cvmfs/soft.computecanada.ca/easybuild/software/2017/avx2/CUDA/intel2016.4/cuda8.0/openmpi/2.1.1/bin/mpic++
 else	
 LDXXX = g++
 endif

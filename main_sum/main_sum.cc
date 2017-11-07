@@ -78,8 +78,11 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   // can if v is too small).
   //
 
+  /* Could also introduce a stage1.5 where we do the GPU computation on
+     the CPU but maybe that is... stupid ? */
+  
   stage_3_start(v,t);
-  mpz_div_ui(v, v,5000000);
+  mpz_div_ui(v, v,500000);
 
   if(mpz_cmp_ui(v,1100000) < 0) mpz_set_ui(v, 1100000); 
 
@@ -134,12 +137,12 @@ void stage_3_start(mpz_t v, mpfr_t t) {
   /* We adjusted it to 34*1200 so that t = 10^30 is completely in the 
      range of stage2 sums */
 
-  mpfr_mul_ui(x, x, 34*1200u, GMP_RNDN);  // x = stage_3_start * t^(1/3)
+  mpfr_mul_ui(x, x, 100*1200u, GMP_RNDN);  // x = stage_3_start * t^(1/3)
 
   /* Should carefully decide if the threshold is 10^14 or 10^15 ? */
   
-  if(mpfr_cmp_d(x, 1000000000000000) > 0){
-    mpfr_set_d(x, 1000000000000000, GMP_RNDN); 
+  if(mpfr_cmp_d(x,5*1000000000000000) > 0){
+    mpfr_set_d(x, 5*1000000000000000, GMP_RNDN); 
   }
 
   mpfr_get_z(v, x, GMP_RNDN); // v = floor( stage_3_start * t^(1/3) )
@@ -742,10 +745,8 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 
   int tot = 1; 
   
-  //  if(total_gpus > gpus){
-  //  if(gpus > 0)
-  //    tot = number_of_gpu_threads*total_gpus / (gpus);
-  // }
+  //  if(total_gpus > gpus)
+  //  tot = number_of_gpu_threads; 
 
   for(int k = 0; k < tot; k++){
   
@@ -785,8 +786,15 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
       pthread_create(&threads[1], NULL, partial_zeta_sum_stage<2>, (void *) &sum2);    
       pthread_join(threads[1], NULL);
       cout.precision(6);
-      if(!closing)
-	cout << "\rStage 2 : Host " << process_id << " Done. Sum was: " << (sum2.S)[0] << "                           " << endl;
+      if(!closing){	
+	cout << "\rStage 2 : Host " << process_id << " Done";
+	if(tot > 1){
+	  cout << " (" << k << "/" << tot << "). ";
+	}else{
+	  cout << ". "; 
+	}
+	cout << " Sum was: " << (sum2.S)[0] << "                                    " << endl;
+      }
     }
 #endif
     
@@ -1005,7 +1013,7 @@ template<int stage> void * zeta_sum_thread(void * ti) {
      separately */
   
 #if HAVE_CUDA
-  int size = 0;
+  long long size = 0;
 #endif
 
   if(is_file_exist(filename.c_str())){

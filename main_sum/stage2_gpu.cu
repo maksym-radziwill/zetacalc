@@ -75,7 +75,7 @@ __global__ void kernel
 
       if(block_size <= TEXTURE_CUT_OFF){
 
-     #pragma unroll 100
+      #pragma unroll 100
      for(unsigned int k = tid; k < block_size; k += blockDim.x){
 
 	    x = 0;

@@ -259,13 +259,13 @@ inline __attribute__((always_inline)) void precompute_a_b(mpz_t v,
 
 }
 
-int estimate_size(mpz_t v0, mpfr_t t, unsigned int N){
+long long estimate_size(mpz_t v0, mpfr_t t, unsigned int N){
   mpz_t v;
   mpz_init(v);
   unsigned int N0 = N; 
   unsigned int K = N0; 
   double tt = mpfr_get_d(t, GMP_RNDN); 
-  int size = 0; 
+  long long size = 0; 
   
   mpz_set(v, v0);
   
@@ -289,7 +289,7 @@ void reallocate(struct precomputation_table ** dev_precompute,
 		cuDoubleComplex ** dev_current_terms,
 		struct precomputation_table ** precompute,
 		cuDoubleComplex ** host_current_terms_pre,
-		Complex ** host_current_terms, int estimate){
+		Complex ** host_current_terms, long long estimate){
   
     cudaFree(*dev_precompute);
     cudaFree(*dev_current_terms);
@@ -318,13 +318,17 @@ void allocate(struct precomputation_table ** dev_precompute,
 	      cuDoubleComplex ** dev_current_terms,
 	      struct precomputation_table ** precompute,
 	      cuDoubleComplex ** host_current_terms_pre,
-	      Complex ** host_current_terms, int estimate){
+	      Complex ** host_current_terms, long long estimate){
 
 
   allocateTexture();
   cudaCheckErrors("texture"); 
 
 
+  //  cout << "Estimate is " << estimate << endl;
+  
+  //  cout << "Requesting " << estimate*(sizeof(struct precomputation_table) + sizeof(cuDoubleComplex)) / (1024*1024) << " MB of memory\n"; 
+  
   cudaMalloc((void **) dev_precompute, estimate*sizeof(struct precomputation_table));
   cudaMalloc((void **) dev_current_terms, estimate*sizeof(cuDoubleComplex));
   cudaCheckErrors("cudaMalloc device");                                                              
@@ -337,18 +341,18 @@ void allocate(struct precomputation_table ** dev_precompute,
 
 }
 		     
-int zeta_block_stage2(mpz_t v0,
-		      unsigned int N,
-		      mpfr_t t,
-		      Double delta,
-		      int M, Complex * S,
-		      struct precomputation_table ** dev_precompute,
-		      cuDoubleComplex ** dev_current_terms,
-		      struct precomputation_table ** precompute,
-		      cuDoubleComplex ** host_current_terms_pre,
-		      Complex ** host_current_terms,
-		      int initial_size, cudaStream_t stream, int id_gpu,
-		      pthread_mutex_t * mutex_lock, int allocated_size) {
+long long zeta_block_stage2(mpz_t v0,
+			    unsigned int N,
+			    mpfr_t t,
+			    Double delta,
+			    int M, Complex * S,
+			    struct precomputation_table ** dev_precompute,
+			    cuDoubleComplex ** dev_current_terms,
+			    struct precomputation_table ** precompute,
+			    cuDoubleComplex ** host_current_terms_pre,
+			    Complex ** host_current_terms,
+			    int initial_size, cudaStream_t stream, int id_gpu,
+			    pthread_mutex_t * mutex_lock, long long allocated_size) {
   
   //
   // A function to compute the the "chunk"
@@ -377,7 +381,7 @@ int zeta_block_stage2(mpz_t v0,
 
     
 
-  int estimate = estimate_size(v,t,N); 
+  long long estimate = estimate_size(v,t,N); 
   
   /* If needed allocate/reallocate memory -- always
      use the same global pointer so that we don't need

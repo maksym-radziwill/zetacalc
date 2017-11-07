@@ -47,7 +47,7 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, double & delta, in
 Complex zeta_block_stage1(mpz_t v, unsigned int K, mpfr_t t, Double delta, int M, Complex * S);
 /* The Complex return value was never used */
 #if HAVE_CUDA
-int zeta_block_stage2(mpz_t v0, unsigned int N, mpfr_t t, Double delta, int M, Complex * S, struct precomputation_table ** , cuDoubleComplex ** , struct precomputation_table ** , cuDoubleComplex ** , Complex ** , int, cudaStream_t , int, pthread_mutex_t *, int);
+long long zeta_block_stage2(mpz_t v0, unsigned int N, mpfr_t t, Double delta, int M, Complex * S, struct precomputation_table ** , cuDoubleComplex ** , struct precomputation_table ** , cuDoubleComplex ** , Complex ** , int, cudaStream_t , int, pthread_mutex_t *, long long);
 #endif
 
 Complex zeta_block_stage3(mpz_t n, unsigned int N, mpfr_t t, Complex Z[30], Double delta, int M, Complex * S, int Kmin = 0);
