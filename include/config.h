@@ -2,13 +2,13 @@
 /* include/config.h.in.  Generated from configure.ac by autoheader.  */
 
 /* Define to 1 if you have the <cuComplex.h> header file. */
-#define HAVE_CUCOMPLEX_H 1
+/* #undef HAVE_CUCOMPLEX_H */
 
 /* Do we have CUDA? */
-#define HAVE_CUDA 1
+#define HAVE_CUDA 0
 
 /* Define to 1 if you have the <cuda_runtime.h> header file. */
-#define HAVE_CUDA_RUNTIME_H 1
+/* #undef HAVE_CUDA_RUNTIME_H */
 
 /* Define to 1 if you have the `floor' function. */
 #define HAVE_FLOOR 1
