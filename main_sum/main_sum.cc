@@ -863,9 +863,9 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
   /* This is just to fix a small "bug" when there is only one host
      as we don't want to print the output of partial computations */
   
-  //  if(closing == 1 && c.max_proc == 1){
-  //  exit(0); 
-  // }
+  if(closing == 1 && c.max_proc == 1){
+    exit(0); 
+  }
   
 #if HAVE_MPI
   closing = 1; 
@@ -1064,13 +1064,13 @@ template<int stage> void * display_thread_main(void * data){
   pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &buf); 
 
   int sum = 0;   
-  while((sum < sum_data->world*1000) && (closing != 1)){
+  while(sum < sum_data->world*1000 && (closing != 1)){
     sum = 0; 
     
     for(int i = 0; i < sum_data->world; i++)
       sum += sum_data->stats[i];     
     
-    usleep(50000);
+    usleep(10000);
 
 #if HAVE_MPI
     MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
@@ -1190,7 +1190,7 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
     pthread_join(threads[n], NULL);
 
 
-  pthread_cancel(display_thread); 
+  //  pthread_cancel(display_thread); 
   //pthread_join(display_thread, NULL);
 
   /* Record output */
