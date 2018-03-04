@@ -221,7 +221,7 @@ template<int stage> struct sum_data_t {
   int gpus; // number of GPUS  
 
   int world = 1; 
-  int rank = 0;
+  int rank  = 0;
   int * stats; 
   
 #if HAVE_MPI  
@@ -735,9 +735,9 @@ template<int stage> Complex * submit_thread(struct shared_thread_data th,
     (p.start0, p.len0, t, th.delta, th.M, S1, precision, th.number_of_cpu_threads,
      th.number_of_gpu_threads, th.gpus);
 
-  // partial_zeta_sum_stage<stage>((void *) &sum1); 
-  pthread_create(&thread, NULL, partial_zeta_sum_stage<stage>, (void *) &sum1);
-  pthread_join(thread, NULL); 
+  partial_zeta_sum_stage<stage>((void *) &sum1); 
+  // pthread_create(&thread, NULL, partial_zeta_sum_stage<stage>, (void *) &sum1);
+  // pthread_join(thread, NULL); 
 
   for(int i = 0; i < th.M; i++){
     S[i] = sum1.S[i]; 
@@ -1066,13 +1066,11 @@ template<int stage> void * display_thread_main(void * data){
     for(int i = 0; i < sum_data->world; i++)
       sum += sum_data->stats[i];     
     
-    usleep(10000);
+    usleep(50000);
 
 #if HAVE_MPI
-    //    pthread_mutex_lock(sum_data->next_mutex); 
     MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
 		  MPI_INT, MPI_COMM_WORLD);
-    //pthread_mutex_unlock(sum_data->next_mutex);
 #else
     sum_data->stats[0] = sum_data->percent_finished;
 #endif
@@ -1179,13 +1177,15 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
 
   pthread_t display_thread; 
   pthread_create(&display_thread, NULL, display_thread_main<stage>, (void *) &sum); 
-  pthread_detach(display_thread); 
+  //  pthread_detach(display_thread); 
   
   for(int n = 0; n < number_of_threads; ++n)
     pthread_create(&threads[n], NULL, zeta_sum_thread<stage>, (void *) &ti[n]);
 
   for(int n = 0; n < number_of_threads; ++n)
     pthread_join(threads[n], NULL);
+
+  pthread_join(display_thread, NULL);
 
   /* Record output */
 
