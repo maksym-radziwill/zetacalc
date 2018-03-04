@@ -772,25 +772,10 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
   
   int cpus = number_of_cpu_threads; // thread::hardware_concurrency();
   
-  // #if HAVE_MPI
-    
   struct cluster_info c = get_cluster_info(gpus, cpus); 
   print_cluster_info(c);
   check_for_gpus(c); 
   
-  /*
-    #else
-
-    struct cluster_info c; 
-    c.offset_cpu = 0; 
-    c.offset_gpu = 0;
-  c.process_id = 0; 
-  c.total_gpus = gpus; 
-  c.total_cores = cpus; 
-  
-  #endif
-  */
-
   signal(SIGINT, signalHandler);
   signal(SIGTERM,signalHandler);
 
@@ -820,25 +805,31 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 
   /* We are assuming here that we always have gpus > 0 
      if not something else should be done */
+
 #if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
 #endif
+
   /* Stage 2 */
   
   p = compute_start_length(c.total_gpus, compute_offset_gpu(c),
 			   s.n2, s.N2, gpus);
   Complex * sum2 = submit_thread<2>(th,c,p,t,STAGE2_PRECISION);
+
 #if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
 #endif
+
   /* Stage 3 */
 
   p = compute_start_length(c.total_cores, compute_offset_cpu(c),
 			   s.n3, s.N3, cpus);  
   Complex * sum3 = submit_thread<3>(th,c,p,t,STAGE3_PRECISION);
+
 #if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
 #endif
+
   /* Compute final sum */
 
   double ReS[M];
@@ -912,8 +903,6 @@ template<int stage> void * zeta_sum_thread(void * ti) {
 #if HAVE_MPI
   int world_rank; 
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-#else
-  int world_rank = 0;
 #endif
 
   // Assign GPU per thread 
@@ -976,8 +965,6 @@ template<int stage> void * zeta_sum_thread(void * ti) {
 #if HAVE_MPI
   int rank;
   MPI_Comm_rank (MPI_COMM_WORLD, &rank);
-#else
-  int rank = 0;
 #endif
 
   
