@@ -220,11 +220,11 @@ template<int stage> struct sum_data_t {
   int numStreams; // number of streams -> set to number_of_threads
   int gpus; // number of GPUS  
 
-#if HAVE_MPI  
+  int world = 1; 
+  int rank = 0;
   int * stats; 
-  int world = 0;
-  int rank; 
-
+  
+#if HAVE_MPI  
   MPI_Request r; 
 #endif
   
@@ -234,10 +234,10 @@ template<int stage> struct sum_data_t {
 #if HAVE_MPI
     MPI_Comm_size(MPI_COMM_WORLD, &world); 
     MPI_Comm_rank(MPI_COMM_WORLD, &rank);
-
+#endif
+    
     stats = (int * ) malloc((world + 1)*sizeof(int)); 
     for(int i = 0; i < world + 1; i++) stats[i] = 0; 
-#endif
     
     mpz_init(next);
     mpz_init(end);
@@ -478,9 +478,13 @@ struct cluster_info{
 struct cluster_info get_cluster_info(int gpus, int cpus){
   
   struct cluster_info cinfo; 
-  
+#if HAVE_MPI  
   MPI_Comm_size(MPI_COMM_WORLD, &cinfo.max_proc);
   MPI_Comm_rank(MPI_COMM_WORLD, &cinfo.process_id);
+#else
+  cinfo.max_proc = 0;
+  cinfo.process_id = 0; 
+#endif
   
   cinfo.has_cpu = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
   cinfo.has_gpu = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
@@ -495,7 +499,8 @@ struct cluster_info get_cluster_info(int gpus, int cpus){
 
   cinfo.has_gpu_global = (int *) malloc((cinfo.max_proc + 1)*sizeof(int));
   cinfo.has_cpu_global = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
-  
+
+#if HAVE_MPI
   MPI_Reduce(&cinfo.has_gpu[0], &cinfo.has_gpu_global[0], cinfo.max_proc, MPI_INT, MPI_SUM, 0,
 	     MPI_COMM_WORLD);
 
@@ -515,7 +520,16 @@ struct cluster_info get_cluster_info(int gpus, int cpus){
   MPI_Barrier(MPI_COMM_WORLD); 
   MPI_Bcast(&cinfo.has_cpu_global[0], cinfo.max_proc, MPI_INT, 0, MPI_COMM_WORLD);
   MPI_Barrier(MPI_COMM_WORLD); 
+#else
+  cinfo.has_gpu[0] = gpus;
+  cinfo.has_cpu[0] = cpus; 
+  cinfo.has_gpu_global[0] = gpus;
+  cinfo.has_cpu_global[0] = cpus; 
+  cinfo.total_gpus = gpus;
+  cinfo.total_cores = cpus; 
+#endif
 
+  
   return cinfo; 
   
 }
@@ -534,7 +548,9 @@ void check_for_gpus(struct cluster_info c){
     if(c.total_gpus == 0){
       printf("There are no GPU's on this cluster -- stage2 code will not be able to run\n"
 	     "and the results will be incorrect. Aborting\n"); 
-      MPI_Finalize(); 
+#if HAVE_MPI
+      MPI_Finalize();
+#endif
       exit(0); 
     }
   }
@@ -756,24 +772,24 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
   
   int cpus = number_of_cpu_threads; // thread::hardware_concurrency();
   
-#if HAVE_MPI
-  
+  // #if HAVE_MPI
+    
   struct cluster_info c = get_cluster_info(gpus, cpus); 
   print_cluster_info(c);
   check_for_gpus(c); 
   
-#else
-  
-  /* Needs to be checked */
-  
-  struct cluster_info c; 
-  c.offset_cpu = 0; 
-  c.offset_gpu = 0;
+  /*
+    #else
+
+    struct cluster_info c; 
+    c.offset_cpu = 0; 
+    c.offset_gpu = 0;
   c.process_id = 0; 
   c.total_gpus = gpus; 
   c.total_cores = cpus; 
-
-#endif
+  
+  #endif
+  */
 
   signal(SIGINT, signalHandler);
   signal(SIGTERM,signalHandler);
@@ -804,25 +820,25 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 
   /* We are assuming here that we always have gpus > 0 
      if not something else should be done */
-
+#if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
-  
+#endif
   /* Stage 2 */
   
   p = compute_start_length(c.total_gpus, compute_offset_gpu(c),
 			   s.n2, s.N2, gpus);
   Complex * sum2 = submit_thread<2>(th,c,p,t,STAGE2_PRECISION);
-
+#if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
-  
+#endif
   /* Stage 3 */
 
   p = compute_start_length(c.total_cores, compute_offset_cpu(c),
 			   s.n3, s.N3, cpus);  
   Complex * sum3 = submit_thread<3>(th,c,p,t,STAGE3_PRECISION);
-  
+#if HAVE_MPI
   MPI_Barrier(MPI_COMM_WORLD); 
-  
+#endif
   /* Compute final sum */
 
   double ReS[M];
@@ -832,8 +848,8 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
     ReS[i] = (sum1)[i].real() + (sum2)[i].real() + (sum3)[i].real();
     ImS[i] = (sum1)[i].imag() + (sum2)[i].imag() + (sum3)[i].imag();
   }  
-  
-#if HAVE_MPI
+
+#if HAVE_MPI  
   double ResultReS[M];
   double ResultImS[M];
   
@@ -841,7 +857,7 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
     ResultReS [i] = 0;
     ResultImS [i] = 0; 
   }
-  
+
   MPI_Barrier(MPI_COMM_WORLD);
   
   MPI_Reduce(&ReS, &ResultReS, M, MPI_DOUBLE, MPI_SUM, 0,
@@ -850,17 +866,19 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 	     MPI_COMM_WORLD);
 
   MPI_Barrier(MPI_COMM_WORLD);
+#endif
 
   if(closing == 1){
     exit(0); 
   }
   
+#if HAVE_MPI
   closing = 1; 
 
   usleep(100000);  /* A bit hacky but whatever */
   
   MPI_Finalize();
-  
+
   if(c.process_id == 0){
     for(int i = 0; i < M; i++) S[i] = Complex (ResultReS[i], ResultImS[i]);
   }
@@ -955,9 +973,14 @@ template<int stage> void * zeta_sum_thread(void * ti) {
   Complex * host_current_terms;
 #endif
 
+#if HAVE_MPI
   int rank;
   MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+#else
+  int rank = 0;
+#endif
 
+  
 #if HAVE_CUDA
   long long size = 0;
 #endif
@@ -1049,22 +1072,24 @@ template<int stage> void * display_thread_main(void * data){
   
   pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &buf); 
 
-  int sum = 0; 
-  
+  int sum = 0;   
   while((sum < sum_data->world*1000) && (closing != 1)){
-
     sum = 0; 
     
     for(int i = 0; i < sum_data->world; i++)
       sum += sum_data->stats[i];     
     
     usleep(10000);
-    
+
+#if HAVE_MPI
     //    pthread_mutex_lock(sum_data->next_mutex); 
     MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
-		MPI_INT, MPI_COMM_WORLD);
+		  MPI_INT, MPI_COMM_WORLD);
     //pthread_mutex_unlock(sum_data->next_mutex);
-
+#else
+    sum_data->stats[0] = sum_data->percent_finished;
+#endif
+    
     if(sum_data->rank == 0){      
       cout.precision(1);
       cout << fixed;

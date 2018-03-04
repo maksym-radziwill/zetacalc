@@ -24,7 +24,7 @@
 #define HAVE_MEMORY_H 1
 
 /* Do we have MPI? */
-#define HAVE_MPI 1
+#define HAVE_MPI 0
 
 /* Define to 1 if you have the `pow' function. */
 #define HAVE_POW 1

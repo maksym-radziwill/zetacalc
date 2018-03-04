@@ -315,10 +315,10 @@ int main(int argc, char * argv[]) {
     }
     
   }
+
+  int process_id = 0; 
   
 #if HAVE_MPI
-  
-  int process_id = 0; 
   
   cout << "\rStarting MPI ... ";
   MPI_Init(&argc, &argv);
