@@ -851,6 +851,10 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 
   MPI_Barrier(MPI_COMM_WORLD);
 
+  if(closing == 1){
+    exit(0); 
+  }
+  
   closing = 1; 
 
   usleep(100000);  /* A bit hacky but whatever */
