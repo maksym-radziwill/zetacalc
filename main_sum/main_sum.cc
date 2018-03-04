@@ -26,16 +26,6 @@
  * 
  */
 
-/* Currently serialization is sometimes correct and sometimes incorrect
-   It's not clear what this behaviour is due to -- my guess is that it has
-   to do with an untimely handling of SIGHUP and this signal should be catched
-   by the program and then exited gracefully */
-/* No but loading the same file gives rise to different answers -- this doesn't
-   quite make sense */
-
-/* For serialization should also check if files with larger N parameter are present and
-   if yes then just load those */
-
 #include "config.h"
 
 #if HAVE_MPI
@@ -59,10 +49,21 @@
 #include <unistd.h>
 #include <sys/syscall.h>
 #define gettid() syscall(SYS_gettid)
+#include "md5.h"
 
 using namespace std;
 
 typedef std::mt19937 RNG;
+
+static int closing = 0; 
+
+bool is_file_exist(string fileName)
+{
+  std::ifstream infile(fileName);
+  return infile.good();
+}
+
+
 
 void stage_2_start(mpz_t v, mpfr_t t) {
   //
@@ -87,34 +88,6 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   if(mpz_cmp_ui(v,1100000) < 0) mpz_set_ui(v, 1100000); 
 
   return; 
-  
-  
-  mpfr_t x;
-  mpfr_init2(x, mpfr_get_prec(t));
-  
-  mpfr_root(x, t, 4, GMP_RNDN); // x = t^(1/4)
-  mpfr_mul_ui(x, x, 3u, GMP_RNDN); // x = 3 * t^(1/4)
-  mpfr_get_z(v, x, GMP_RNDN); // v = floor(3 * t^(1/4)
-  
-
-  mpfr_set(x, t, GMP_RNDN); 
-  mpfr_log10(x, x, GMP_RNDN);  
-
-  // Adjust the starting point of stage2 so that we can augment the block_size
-  // in stage2 without running out of memory
-
-  int multiplier = (int) mpfr_get_d(x, GMP_RNDN); 
-  multiplier -= 29; 
-  // the -6 is somewhat arbitrary
-  if(multiplier < -6){
-    if(mpz_cmp_ui(v, 1100000u) < 0) mpz_set_ui(v, 1100000u); 
-  }else{
-    if(multiplier < 1) multiplier = 0; 
-    multiplier = pow(10, multiplier); 
-    if(mpz_cmp_ui(v, multiplier*11000000u) < 0) mpz_set_ui(v, multiplier*11000000u);
-  }
-  mpfr_clear(x);
-
 
 }
 
@@ -149,24 +122,6 @@ void stage_3_start(mpz_t v, mpfr_t t) {
   
 }
 
-void draw_bar(int s, int p){
-  cout << fixed;
-  cout.precision(1); 
-  int pp = 4*p/100;
-  if (p < 0) return; 
-  cout << "\rStage " << s << " : [";
-  for(int i = 0; i < pp; i++){
-    cout << "#"; 
-  }
-  for(int i = pp; i < 40; i++){
-    cout << " "; 
-  }
-  cout << "] " << (double) p/10.0 << " %     ";
-  
-  cout.flush();
-}
-
-
 int estimate_size2(mpz_t v0, mpfr_t t, unsigned int N){
   mpz_t v;
   mpz_init(v);
@@ -193,60 +148,41 @@ int estimate_size2(mpz_t v0, mpfr_t t, unsigned int N){
   return size; 
 }
 
-static int closing = 0;
-
 void signalHandler( int signum ) {
-  cout << "\rSaving state and exiting...                          ";
-  cout.flush();
   closing = 1;
-#if HAVE_MPI
-  MPI_Bcast(&closing, 1, MPI_INT, 0, MPI_COMM_WORLD); 
-#endif
+  //MPI_Bcast(&closing, 1, MPI_INT, 0, MPI_COMM_WORLD); 
+  // MPI_Barrier(MPI_COMM_WORLD);
+  cout << "\rSaving state and exiting...                          "; 
+  cout.flush();
 }
 
-string prepare_string(string filename, int gpus, int number_of_gpu_threads,
-		      int cpus, int number_of_cpu_threads, int total_cores,
-		      int total_gpus, mpz_t start1, mpz_t len1){
-  return
-    filename + "," 
-    + to_string(gpus) + "," 
-    + to_string(number_of_gpu_threads) + ","
-    + to_string(cpus) + "," 
-    + to_string(number_of_cpu_threads) + ","
-    + to_string(total_cores) + "," 
-    + to_string(total_gpus) + "," 
-    + mpz_get_str(NULL, 10, start1) + "," 
-    + mpz_get_str(NULL, 10, len1);
-  
+void write_stream(std::ofstream & out, Complex * S, int M){
+  for(int i = 0; i < M; i++)
+    out.write(reinterpret_cast<char*>(&S[i]), sizeof(Complex));  
 }
 
-
-void serialize_local(string filename, Complex * S, int M){
-  ofstream out;
-  out.open(filename,std::ofstream::out);
-  out.precision(2000);
+void read_stream(std::ifstream & in, Complex * S, int M){
   for(int i = 0; i < M; i++){
-    out << S[i] << endl; 
+    in.read(reinterpret_cast<char*>(&S[i]), sizeof(Complex));
   }
-  out.flush();
+}
+
+void write(const std::string& file_name, Complex * S, int M){
+  std::ofstream out;
+  out.open(file_name, std::ios::binary);
+  for(int i = 0; i < M; i++)
+    out.write(reinterpret_cast<char*>(&S[i]), sizeof(Complex));
   out.close();
 }
 
-void deserialize_local(string filename, Complex * S, int M){
-    ifstream in;
-    in.open(filename, std::ifstream::in);
-    in.precision(2000);
-    for(int i = 0; i < M; i++)
-      in >> S[i]; 
-    in.close();
+void read(const std::string& file_name, Complex * S, int M){
+  std::ifstream in;
+  in.open(file_name, std::ios::binary);
+  for(int i = 0; i < M; i++){
+    in.read(reinterpret_cast<char*>(&S[i]), sizeof(Complex));
+  }
+  in.close();
 }
-
-bool is_file_exist(const char *fileName)
-{
-  std::ifstream infile(fileName);
-  return infile.good();
-}
-
 
 
 template<int stage> struct sum_data_t {
@@ -272,22 +208,36 @@ template<int stage> struct sum_data_t {
   double epsilon; // a precision parameter that is passed to the theta algorithm 
   
   // to help with debugging 
-  int percent_finished;
+  int percent_finished = 0;
 
-  string filename; 
-  
   /* GPU Data -- each thread get its own CUDA stream */
 #if HAVE_CUDA
   cudaStream_t * cudaStreams;  // Place holder for stream data
 #endif
+
   int number_of_gpu_threads; 
   int number_of_cpu_threads; 
   int numStreams; // number of streams -> set to number_of_threads
   int gpus; // number of GPUS  
+
+#if HAVE_MPI  
+  int * stats; 
+  int world = 0;
+  int rank; 
+
+  MPI_Request r; 
+#endif
   
   // a struct constructor: sets variable values and initializes a thread
-  sum_data_t(mpz_t start, mpz_t _length, mpfr_t _t, double _delta , int _M, complex<double> * _S, double _epsilon, int num_cpu_th, int num_gpu_th, int num_gpus, string file) {
-    filename = file;
+  sum_data_t(mpz_t start, mpz_t _length, mpfr_t _t, double _delta , int _M, complex<double> * _S, double _epsilon, int num_cpu_th, int num_gpu_th, int num_gpus) {
+  
+#if HAVE_MPI
+    MPI_Comm_size(MPI_COMM_WORLD, &world); 
+    MPI_Comm_rank(MPI_COMM_WORLD, &rank);
+
+    stats = (int * ) malloc((world + 1)*sizeof(int)); 
+    for(int i = 0; i < world + 1; i++) stats[i] = 0; 
+#endif
     
     mpz_init(next);
     mpz_init(end);
@@ -310,12 +260,13 @@ template<int stage> struct sum_data_t {
     next_mutex = new pthread_mutex_t;
     pthread_mutex_init(report_mutex, NULL);
     pthread_mutex_init(next_mutex, NULL);
-    percent_finished = -1;
+    percent_finished = 0;
     
     /* New GPU data initialization */
     gpus = num_gpus; 
     number_of_gpu_threads = num_gpu_th; 
     number_of_cpu_threads = num_cpu_th;
+    
 #if HAVE_CUDA
     cudaStreams = new cudaStream_t [number_of_gpu_threads];
 #endif
@@ -324,20 +275,21 @@ template<int stage> struct sum_data_t {
        set first */
   }
   
-  // a struct destructor
+
   ~sum_data_t() {
     pthread_mutex_destroy(report_mutex);
     pthread_mutex_destroy(next_mutex);
     delete report_mutex;
     delete next_mutex;
 
-    // Problem?
 #if HAVE_CUDA
     delete cudaStreams;
 #endif
+
     mpz_clear(next);
     mpz_clear(end);
     mpfr_clear(t);
+
   }
 
   void serialize(string file){
@@ -350,7 +302,7 @@ template<int stage> struct sum_data_t {
 
     ofstream out;
     out.open(file,std::ofstream::out);
-    out.precision(2000);
+    out.precision(30);
     out << M << endl
 	<< length << endl
 	<< tt << endl 
@@ -373,20 +325,54 @@ template<int stage> struct sum_data_t {
 
   }
 
+  void record_output(string filename){
+    write(filename, S, M);
+  }
+
+  void load_output(string filename){
+    read(filename, S, M);
+  }
+  
+  string hash(int tid, int rank, string str2){
+    string test;
+    std::ostringstream out;
+    out.precision(30);
+    out << str2 << endl;
+    out << tid << endl;
+    out << M << endl
+	<< length << endl
+	<< tt << endl 
+        << delta << endl
+	<< epsilon << endl
+      //   	<< percent_finished << endl
+	<< number_of_cpu_threads << endl
+	<< number_of_gpu_threads << endl
+	<< gpus << endl
+      //      	<< next << endl
+      	<< end << endl
+	<< stage << endl;
+    char* str = NULL;
+    mpfr_exp_t e;
+    str = mpfr_get_str (NULL, &e, 10, 0, t, MPFR_RNDN);
+    out << str << endl << e << endl;
+    out << rank;
+    return ".data" + md5(out.str());    
+  }
+  
   void deserialize(string file){
     string t_str; 
     ifstream in;
     in.open(file, std::ifstream::in);
-    in.precision(2000);
+    in.precision(30);
     in >> M >> length >> tt >> delta >> epsilon 
        >> percent_finished >> number_of_cpu_threads 
        >> number_of_gpu_threads >> gpus;
     in >> next >> end >> stage2_max_size;
-    in >> t_str; 
+    in >> t_str;
     in.close(); 
     mpfr_set_str(t, t_str.c_str(), 10, GMP_RNDN); 
   }  
-  
+
   // locks thread, computes and returns block_size and stores the starting point of next 
   // available "chunk", then unlocks thread 
   unsigned long next_block(mpz_t start) {
@@ -433,22 +419,24 @@ template<int stage> struct sum_data_t {
     else {
       block_size = max_block_size;
     }
+
     
     double remainder = mpz_get_d(start);
-    int current_percent_finished = 1000 * (1.0 - remainder/length);
-    if(percent_finished != current_percent_finished)
-      draw_bar(stage, current_percent_finished);       
-    
-    percent_finished = current_percent_finished;
-    
+
     mpz_set(start, next);               /* start = next (start is now the
 					   beginning point of the remainder
 					   of the partial sum) */
     
     mpz_add_ui(next, next, block_size); // next = next + block_size
     
+
+    percent_finished = (int) (1000*(1.0 - remainder/length)); 
     
+    /* Basically need to run this in some independent loop */ 
+
     pthread_mutex_unlock(next_mutex);
+
+    
     return block_size;
   }
   
@@ -465,16 +453,296 @@ template<int stage> struct sum_data_t {
   }
 };
 
+struct threadinfo {
+  void * data;
+  int num;
+  Complex * S;
+};
+
 // This function is declared here and defined at the end of the file
 template<int stage> void * partial_zeta_sum_stage(void * data); 
 
+
+struct cluster_info{
+  int process_id;
+  int max_proc;
+  int * has_cpu; 
+  int * has_gpu;
+  int * has_cpu_global;
+  int * has_gpu_global;
+  int total_gpus;
+  int total_cpus;
+  int total_cores;
+};
+
+struct cluster_info get_cluster_info(int gpus, int cpus){
+  
+  struct cluster_info cinfo; 
+  
+  MPI_Comm_size(MPI_COMM_WORLD, &cinfo.max_proc);
+  MPI_Comm_rank(MPI_COMM_WORLD, &cinfo.process_id);
+  
+  cinfo.has_cpu = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
+  cinfo.has_gpu = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
+  
+  for(int i = 0; i < cinfo.max_proc; i++){
+    cinfo.has_gpu[i] = 0;
+    cinfo.has_cpu[i] = 0; 
+  }
+  
+  cinfo.has_gpu[cinfo.process_id] = gpus;
+  cinfo.has_cpu[cinfo.process_id] = cpus; 
+
+  cinfo.has_gpu_global = (int *) malloc((cinfo.max_proc + 1)*sizeof(int));
+  cinfo.has_cpu_global = (int *) malloc((cinfo.max_proc + 1)*sizeof(int)); 
+  
+  MPI_Reduce(&cinfo.has_gpu[0], &cinfo.has_gpu_global[0], cinfo.max_proc, MPI_INT, MPI_SUM, 0,
+	     MPI_COMM_WORLD);
+
+  MPI_Reduce(&cinfo.has_cpu[0], &cinfo.has_cpu_global[0], cinfo.max_proc, MPI_INT, MPI_SUM, 0,
+	     MPI_COMM_WORLD); 
+    
+  MPI_Reduce(&cinfo.has_gpu[cinfo.process_id], &cinfo.total_gpus, 1, MPI_INT, MPI_SUM, 0,
+  	     MPI_COMM_WORLD);
+  MPI_Reduce(&cinfo.has_cpu[cinfo.process_id], &cinfo.total_cores, 1, MPI_INT, MPI_SUM, 0, 
+  	     MPI_COMM_WORLD); 
+
+  MPI_Bcast(&cinfo.total_gpus, 1, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); 
+  MPI_Bcast(&cinfo.total_cores, 1, MPI_INT, 0, MPI_COMM_WORLD); 
+  MPI_Barrier(MPI_COMM_WORLD); 
+  MPI_Bcast(&cinfo.has_gpu_global[0], cinfo.max_proc, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); 
+  MPI_Bcast(&cinfo.has_cpu_global[0], cinfo.max_proc, MPI_INT, 0, MPI_COMM_WORLD);
+  MPI_Barrier(MPI_COMM_WORLD); 
+
+  return cinfo; 
+  
+}
+
+void print_cluster_info(struct cluster_info c){
+  if(c.process_id == 0){ 
+    for(int i = 0; i < c.max_proc; i++){
+      printf("host %d has %d gpus and %d cpus\n", i, c.has_gpu_global[i], c.has_cpu_global[i]);
+    }
+    printf("total number of cpu %d\ntotal numbers of gpus %d\n", c.total_cores, c.total_gpus); 
+  }
+}
+
+void check_for_gpus(struct cluster_info c){
+  if(c.process_id == 0){    
+    if(c.total_gpus == 0){
+      printf("There are no GPU's on this cluster -- stage2 code will not be able to run\n"
+	     "and the results will be incorrect. Aborting\n"); 
+      MPI_Finalize(); 
+      exit(0); 
+    }
+  }
+}
+
+struct stage_len {
+  mpz_t n2;
+  mpz_t n3;
+  mpz_t N1;
+  mpz_t N2;
+  mpz_t N3; 
+  mpz_t end; 
+};
+
+void free_stage_len(struct stage_len s){
+  mpz_clear(s.n2);
+  mpz_clear(s.n3);
+  mpz_clear(s.end);
+  mpz_clear(s.N1);
+  mpz_clear(s.N2);
+  mpz_clear(s.N3);
+}
+
+int compute_offset_cpu(struct cluster_info c){
+  int offset = 0;
+  for(int i = 0; i < c.process_id; i++) offset += c.has_cpu_global[i];
+  return offset;
+}
+
+int compute_offset_gpu(struct cluster_info c){
+  int offset = 0;
+  for(int i = 0; i < c.process_id; i++) offset += c.has_gpu_global[i];
+  return offset; 
+}
+
+struct stage_len compute_stage_len(struct cluster_info c, mpz_t start, mpfr_t t, mpz_t length){
+  struct stage_len s; 
+
+  mpz_t len0, len1, start0, start1; 
+  mpz_init(len0); mpz_init(start0);
+  mpz_init(len1); mpz_init(start1);
+  
+  mpz_init(s.n2); mpz_init(s.n3); mpz_init(s.end);
+  mpz_init(s.N1); mpz_init(s.N2); mpz_init(s.N3);
+  
+  stage_2_start(s.n2, t); // n2 is the starting point of stage_2 
+  stage_3_start(s.n3, t); // n3 is the starting point of stage_3
+
+
+  /* These might be quite irrelevant */
+  mpz_sub(len0, s.n2, start);
+  mpz_mod_ui(len0, len0, c.total_cores);
+  mpz_sub(s.n2, s.n2, len0);
+  
+  mpz_sub(len0, s.n3, s.n2); // len0 = lenth of stage2
+  mpz_mod_ui(len0, len0, c.total_gpus); // len0 = length of stage2 % total_gpus
+  mpz_sub(s.n3, s.n3, len0); // n2 = start of stage2 + ((length of stage2) % total_gpus)
+  
+  mpz_add(s.end, start, length); // end = start+length, is the endpoint of the partial sum 
+  // (so the last term in the sum is n = end - 1)
+  /* End of possibly irrelevant things */
+  
+  if(mpz_cmp(s.end,s.n3) < 0) 
+    mpz_set(s.n3, s.end); // if end < n3, set n3 = end
+  if(mpz_cmp(start,s.n3) > 0) 
+    mpz_set(s.n3, start); // if start > n3, set n3 = start
+  if(mpz_cmp(s.end,s.n2) < 0) 
+    mpz_set(s.n2, s.end); // if end < n2, set n2 = end
+  if(mpz_cmp(start,s.n2) > 0) 
+    mpz_set(s.n2, start); // if start > n2, set n2 = start
+
+  mpz_sub(s.N1, s.n2, start); // N1 = n20 - start, is the length of stage 1 sum
+  mpz_sub(s.N2, s.n3, s.n2); // N2 = n3 - n2, is the length of stage 2 sum
+  mpz_sub(s.N3, s.end, s.n3); // N3 = end - n3, is the length of stage 3 sum
+
+  mpz_clear(len0); mpz_clear(len1); mpz_clear(start0); mpz_clear(start1); 
+  
+  return s;
+  
+}
+
+void print_stage_info(struct stage_len s, struct cluster_info c,mpz_t start){
+  if(c.process_id == 0){
+    cout << "Stage 1 range = [" << start << "," << s.n2 << "]\n";
+    
+    if(mpz_cmp(s.n2,s.n3) == 0)
+      cout << "Stage 2 range = empty\n";
+    else
+      cout << "Stage 2 range = (" << s.n2 << "," << s.n3 << "]\n";
+    
+    if(mpz_cmp(s.n3,s.end) == 0)
+      cout << "Stage 3 range = empty\n";
+    else
+      cout << "Stage 3 range = [" << s.n3 << "," << s.end << "]\n";
+  }
+}
+
+struct start_length {
+  mpz_t start0;
+  mpz_t len0; 
+};
+
+void free_start_length(struct start_length p){
+  mpz_clear(p.start0);
+  mpz_clear(p.len0); 
+}
+
+struct start_length compute_start_length(int total, int offset, mpz_t start, mpz_t N1, int cpus){
+  
+  struct start_length s;
+  mpz_init(s.start0);
+  mpz_init(s.len0);
+  
+  mpz_set(s.len0, N1);    
+  mpz_div_ui(s.len0, s.len0, total); // len = length_of_stage2 / (tot * total_gpus)           
+    
+    // So this covers almost everything except for the remainder...
+    // but we can add the remainder to stage1 sums... which we did.
+    // so now this dissection should be perfect
+    
+  mpz_set(s.start0, s.len0);  // start0 = length_of_stage2 / (tot * total_gpus)
+    
+  mpz_mul_ui(s.start0, s.start0, offset);
+  // start0 = (k * total_gpus + offset_gpu) * length_of_stage2 / (tot * total gpus)
+    
+  mpz_add(s.start0, s.start0, start);
+  // start0 = n2 + (k * total_gpus + offset_gpu) * length_stage_2 / total_gpus
+    
+  mpz_mul_ui(s.len0, s.len0, cpus);
+  // len = gpus * length_of_stage2 / (tot * total_gpus)    
+
+  return s;
+}
+
 /* Also need to add case when total_gpus = 0 */
 
-Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, int &M, Complex * S, int Kmin, int number_of_cpu_threads, int number_of_gpu_threads, int gpus, string filename) {
+struct shared_thread_data {
+  string filename;
+  int gpus;
+  int cpus;
+  int number_of_gpu_threads;
+  int number_of_cpu_threads; 
+  int M; 
+  double delta;
+};
+
+struct shared_thread_data
+init_shared_thread_data(string filename, int gpus,
+			int number_of_gpu_threads,
+			int number_of_cpu_threads,
+			int M, int cpus, double delta){
+
+  struct shared_thread_data th; 
+  th.filename = filename;
+  th.gpus = gpus;
+  th.number_of_gpu_threads = number_of_gpu_threads;
+  th.number_of_cpu_threads = number_of_cpu_threads;
+  th.M = M;
+  th.cpus = cpus;
+  th.delta = delta; 
   
-  signal(SIGINT, signalHandler);
-  signal(SIGTERM,signalHandler);
+  return th;
+}
+
+
+template<int stage> Complex * submit_thread(struct shared_thread_data th,
+					    struct cluster_info c,
+					    struct start_length p,
+					    mpfr_t t, int precision){
+
+  pthread_t thread;
+
+  Complex * S1 = new Complex [th.M]; 
+  Complex * S = (Complex *) malloc(sizeof(Complex)*th.M);
+
+  if(mpz_cmp_ui(p.len0,0) == 0){
+    for(int i = 0; i < th.M; i++) S[i] = 0;
+    return S; 
+  }
   
+  sum_data_t<stage> sum1
+    (p.start0, p.len0, t, th.delta, th.M, S1, precision, th.number_of_cpu_threads,
+     th.number_of_gpu_threads, th.gpus);
+
+  // partial_zeta_sum_stage<stage>((void *) &sum1); 
+  pthread_create(&thread, NULL, partial_zeta_sum_stage<stage>, (void *) &sum1);
+  pthread_join(thread, NULL); 
+
+  for(int i = 0; i < th.M; i++){
+    S[i] = sum1.S[i]; 
+  }
+  
+  delete [] S1;
+
+  if(sum1.rank == 0) cout << endl;
+  free_start_length(p); 
+
+  return S; 
+}
+
+/* Need to review special cases : 
+ * - No MPI
+ * - gpus = 0
+ */
+ 
+
+Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, int &M, Complex * S, int Kmin, int number_of_cpu_threads, int number_of_gpu_threads, pthread_t thread, int gpus, string filename) {
+
   //
   // This function computes the partial sum:
   //
@@ -484,110 +752,87 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
   // values in S. It also returns the value of the partial sum at y = t
   //
 
-  mpz_t n2, n3, end, N1, N2, N3;
-  mpz_init(n2);
-  mpz_init(n3);
-  mpz_init(end);
-  mpz_init(N1);
-  mpz_init(N2);
-  mpz_init(N3);
-  
-  stage_2_start(n2, t); // n2 is the starting point of stage_2 
-
-  stage_3_start(n3, t); // n3 is the starting point of stage_3
-    
-  // stage 1 contribution to the partial sum comes from start <= n < n2,
-  // stage 2 from n2 <= n < n3, and stage 3 from n3 <= n < end. The "if 
-  // statements" below reset n2 & n3 appropriately to mark the start & 
-  // end points of stages 2 & 3.
-  //
-
   /* Init MPI and adjust according to capabilities */
-
+  
   int cpus = number_of_cpu_threads; // thread::hardware_concurrency();
-
+  
 #if HAVE_MPI
-
-
-  int process_id;
-  int max_proc;
-  MPI_Comm_size(MPI_COMM_WORLD, &max_proc);
-  MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
-
-  //  printf("Process id %d out of %d\n", process_id, max_proc); 
-
-  int has_cpu[max_proc]; 
-  int has_gpu[max_proc];
-  for(int i = 0; i < max_proc; i++){
-    has_gpu[i] = 0;
-    has_cpu[i] = 0; 
-  }
   
-  has_gpu[process_id] = gpus;
-  has_cpu[process_id] = cpus; 
+  struct cluster_info c = get_cluster_info(gpus, cpus); 
+  print_cluster_info(c);
+  check_for_gpus(c); 
   
-  int has_gpu_global[max_proc]; 
-  int has_cpu_global[max_proc]; 
-  
-  MPI_Reduce(&has_gpu, &has_gpu_global, max_proc, MPI_INT, MPI_SUM, 0,
-	     MPI_COMM_WORLD);
-
-  MPI_Reduce(&has_cpu, &has_cpu_global, max_proc, MPI_INT, MPI_SUM, 0,
-	     MPI_COMM_WORLD); 
-  
-  /* The code here assumes one MPI process per node */
-
-  int total_gpus = 0; 
-  int total_cores = 0; 
-  
-  MPI_Reduce(&gpus, &total_gpus, 1, MPI_INT, MPI_SUM, 0,
-  	     MPI_COMM_WORLD);
-  MPI_Reduce(&cpus, &total_cores, 1, MPI_INT, MPI_SUM, 0, 
-  	     MPI_COMM_WORLD); 
-
-  MPI_Bcast(&total_gpus, 1, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); 
-  MPI_Bcast(&total_cores, 1, MPI_INT, 0, MPI_COMM_WORLD); 
-  MPI_Barrier(MPI_COMM_WORLD); 
-  MPI_Bcast(&has_gpu_global, max_proc, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); 
-  MPI_Bcast(&has_cpu_global, max_proc, MPI_INT, 0, MPI_COMM_WORLD);
-  MPI_Barrier(MPI_COMM_WORLD); 
-  
-  if(process_id == 0){
-    for(int i = 0; i < max_proc; i++){
-      printf("host %d has %d gpus and %d cpus\n", i, has_gpu_global[i], has_cpu_global[i]);
-    }
-    printf("total number of cpu %d\ntotal numbers of gpus %d\n", total_cores, total_gpus); 
-    
-    if(total_gpus == 0){
-      printf("There are no GPU's on this cluster -- stage2 code will not be able to run\n"
-	     "and the results will be incorrect. Aborting\n"); 
-      MPI_Finalize(); 
-      exit(0); 
-    }
-  }
-  
-  
-  int offset_gpu = 0; 
-  for(int i = 0; i < process_id; i++){
-    offset_gpu += has_gpu_global[i]; 
-  }
-
-  int offset_cpu = 0;
-  for(int i = 0; i < process_id; i++){
-    offset_cpu += has_cpu_global[i]; 
-  }
 #else
-  int offset_cpu = 0; 
-  int offset_gpu = 0; 
-  int process_id = 0; 
-  int total_gpus = gpus; 
-  int total_cores = cpus; 
+  
+  /* Needs to be checked */
+  
+  struct cluster_info c; 
+  c.offset_cpu = 0; 
+  c.offset_gpu = 0;
+  c.process_id = 0; 
+  c.total_gpus = gpus; 
+  c.total_cores = cpus; 
+
 #endif
 
-  // Here we would like to dissect into intervals that are perhaps 2*total_gpus shorter
-  // and also 2*total_cpus shorter and iterate this construction twice
+  signal(SIGINT, signalHandler);
+  signal(SIGTERM,signalHandler);
+
+  struct stage_len s = compute_stage_len(c,start,t,length); 
+  print_stage_info(s,c,start); 
+  
+  // we carry out a precomputation, which is needed in conjunction with a 
+  // modification of Fenynman's algorithm for computing exp(i*t*log(n)); see 
+  // log.cc
+  
+  create_exp_itlogn_table(t);
+      
+  struct shared_thread_data th =
+    init_shared_thread_data(filename, gpus,
+			    number_of_gpu_threads,
+			    number_of_cpu_threads,
+			    M, cpus, delta); 
+
+  /* Stage 1 */
+  
+  /* Further partitions the stage length in s according to how many clusters we have */
+  struct start_length p = compute_start_length(c.total_cores, compute_offset_cpu(c),
+					       start, s.N1, cpus);
+
+  /* Submit the job -- The resulting output is an array of size M */
+  Complex * sum1 = submit_thread<1>(th,c,p,t,STAGE2_PRECISION);
+
+  /* We are assuming here that we always have gpus > 0 
+     if not something else should be done */
+
+  MPI_Barrier(MPI_COMM_WORLD); 
+  
+  /* Stage 2 */
+  
+  p = compute_start_length(c.total_gpus, compute_offset_gpu(c),
+			   s.n2, s.N2, gpus);
+  Complex * sum2 = submit_thread<2>(th,c,p,t,STAGE2_PRECISION);
+
+  MPI_Barrier(MPI_COMM_WORLD); 
+  
+  /* Stage 3 */
+
+  p = compute_start_length(c.total_cores, compute_offset_cpu(c),
+			   s.n3, s.N3, cpus);  
+  Complex * sum3 = submit_thread<3>(th,c,p,t,STAGE3_PRECISION);
+  
+  MPI_Barrier(MPI_COMM_WORLD); 
+  
+  /* Compute final sum */
+
+  double ReS[M];
+  double ImS[M];
+  
+  for(int i = 0; i < M ; i++){
+    ReS[i] = (sum1)[i].real() + (sum2)[i].real() + (sum3)[i].real();
+    ImS[i] = (sum1)[i].imag() + (sum2)[i].imag() + (sum3)[i].imag();
+  }  
+  
 #if HAVE_MPI
   double ResultReS[M];
   double ResultImS[M];
@@ -596,328 +841,40 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
     ResultReS [i] = 0;
     ResultImS [i] = 0; 
   }
-#endif
   
-  mpz_t len0;
-  mpz_t start0;
-  mpz_t len1;
-  mpz_t start1;
-
-  mpz_init(len0); 
-  mpz_init(start0);
-  mpz_init(len1);
-  mpz_init(start1);
-
-  // we carry out a precomputation, which is needed in conjunction with a 
-  // modification of Fenynman's algorithm for computing exp(i*t*log(n)); see 
-  // log.cc  
-
-  create_exp_itlogn_table(t);
-
-
+  MPI_Barrier(MPI_COMM_WORLD);
   
-  /* If tiny value stupid to use MPI and also leads to incorrect results */
-  /*
-  mpz_add(end, start, length);
-  if(mpz_cmp_ui(end, 1000000000) < 0){
-    number_of_cpu_threads = 1; 
-    total_cores = 1;
-  }
-  */
-
-
-  
-  /* Bugs if small values and MPI used heavily... because we subtract */
-  
-  
-  mpz_sub(len0, n2, start);
-  mpz_mod_ui(len0, len0, total_cores);
-  mpz_sub(n2, n2, len0);
-  
-    
-  
-  mpz_sub(len0, n3, n2); // len0 = lenth of stage2
-  mpz_mod_ui(len0, len0, total_gpus); // len0 = length of stage2 % total_gpus
-  mpz_sub(n3, n3, len0); // n2 = start of stage2 + ((length of stage2) % total_gpus)
-  
-  
-  mpz_add(end, start, length); // end = start+length, is the endpoint of the partial sum 
-  // (so the last term in the sum is n = end - 1)
-
-  
-  
-  // Do a similar adjustement for stage3
-  
-  if(mpz_cmp(end,n3) < 0) 
-    mpz_set(n3, end); // if end < n3, set n3 = end
-  if(mpz_cmp(start,n3) > 0) 
-    mpz_set(n3, start); // if start > n3, set n3 = start
-  if(mpz_cmp(end,n2) < 0) 
-    mpz_set(n2, end); // if end < n2, set n2 = end
-  if(mpz_cmp(start,n2) > 0) 
-    mpz_set(n2, start); // if start > n2, set n2 = start
-
-      
-  mpz_sub(N1, n2, start); // N1 = n20 - start, is the length of stage 1 sum
-  mpz_sub(N2, n3, n2); // N2 = n3 - n2, is the length of stage 2 sum
-  mpz_sub(N3, end, n3); // N3 = end - n3, is the length of stage 3 sum
-
-  if(process_id == 0){
-    cout << "Stage 1 range = [" << start << "," << n2 << "]\n";
-
-    if(mpz_cmp(n2,n3) == 0)
-      cout << "Stage 2 range = empty\n";
-    else
-      cout << "Stage 2 range = (" << n2 << "," << n3 << "]\n";
-
-    if(mpz_cmp(n3,end) == 0)
-      cout << "Stage 3 range = empty\n";
-    else
-      cout << "Stage 3 range = [" << n3 << "," << end << "]\n";
-  }
-    
-  
-  Complex * S1 = new Complex [M]; 
-  Complex * S2 = new Complex [M]; 
-  Complex * S3 = new Complex [M]; 
-
-  pthread_t threads[3];
-  
-  // with the current layout there are no advantages to using thread
-  // but the code has been written in such a way so that
-  // the snippets below can be rearranged to start stage 2 and 3
-  // in paralell -- this can be advantageous on some architectures
-  // since the use of the gpu and cpu is somewhat independent
-  // in particular this should be advantageous if the number of cores
-  // exceeds the number 4 times the number of gpus ... 
-
-  /* Would make sense to actually do this computation on process_id == 1 say */
-
-    mpz_set(len0, N1);    
-    mpz_div_ui(len0, len0, total_cores); // len = length_of_stage2 / (tot * total_gpus)           
-    
-    // So this covers almost everything except for the remainder...
-    // but we can add the remainder to stage1 sums... which we did.
-    // so now this dissection should be perfect
-    
-    mpz_set(start0, len0);  // start0 = length_of_stage2 / (tot * total_gpus)
-    
-    mpz_mul_ui(start0, start0, offset_cpu );
-    // start0 = (k * total_gpus + offset_gpu) * length_of_stage2 / (tot * total gpus)
-    
-    mpz_add(start0, start0, start);
-    // start0 = n2 + (k * total_gpus + offset_gpu) * length_stage_2 / total_gpus
-    
-    mpz_mul_ui(len0, len0, cpus);
-    // len = gpus * length_of_stage2 / (tot * total_gpus)    
-    
-
-    string filename1 = prepare_string(filename, gpus, number_of_gpu_threads,
-				      cpus, number_of_cpu_threads, total_cores,
-				      total_gpus, start0, len0); 
-    
-    sum_data_t<1> sum1(start0, len0,
-		       t, delta, M, S1, STAGE2_PRECISION, number_of_cpu_threads, 
-		       number_of_gpu_threads, gpus, filename1);
-    
-    
-    // compute the stages 1, 2, & 3 sums
-    pthread_create(&threads[0], NULL, partial_zeta_sum_stage<1>, (void *) &sum1);    
-    pthread_join(threads[0], NULL);
-    cout.precision(6);
-    if(!closing)
-      cout << "\rStage 1 : Host " << process_id << " Done. Sum was: " << (sum1.S)[0] << "                           " << endl;
-    
-    
-  if(closing){
-#if HAVE_MPI
-    MPI_Finalize();
-#endif 
-    exit(0); 
-  }
-
-  double ReS[M];
-  double ImS[M]; 
-  for(int j = 0; j < M; j++){
-    ReS[j] = (sum1.S)[j].real();
-    ImS[j] = (sum1.S)[j].imag(); 
-  }
-
-  int tot = 1; 
-  
-  //  if(total_gpus > gpus)
-  //  tot = number_of_gpu_threads; 
-
-  for(int k = 0; k < tot; k++){
-  
-    // Split stage2 according to how many GPU's
-    
-    if(gpus > 0){
-      mpz_set(len0, N2);    
-      mpz_div_ui(len0, len0, tot*total_gpus); // len = length_of_stage2 / (tot * total_gpus)           
-      
-      // So this covers almost everything except for the remainder...
-      // but we can add the remainder to stage1 sums... which we did.
-      // so now this dissection should be perfect
-      
-      mpz_set(start0, len0);  // start0 = length_of_stage2 / (tot * total_gpus)
-    
-      mpz_mul_ui(start0, start0, k*total_gpus + offset_gpu );
-      // start0 = (k * total_gpus + offset_gpu) * length_of_stage2 / (tot * total gpus)
-      
-      mpz_add(start0, start0, n2);
-      // start0 = n2 + (k * total_gpus + offset_gpu) * length_stage_2 / total_gpus
-      
-      mpz_mul_ui(len0, len0, gpus);
-      // len = gpus * length_of_stage2 / (tot * total_gpus)    
-      
-    }
-    
-    string filename2 =  prepare_string(filename, gpus, number_of_gpu_threads,
-				       cpus, number_of_cpu_threads, total_cores,
-				       total_gpus, start0, len0); 
-    
-    sum_data_t<2> sum2(start0, len0,
-		       t, delta, M, S2, STAGE2_PRECISION, number_of_cpu_threads, 
-		       number_of_gpu_threads, gpus, filename2);  
-    
-#if HAVE_CUDA
-    if(gpus > 0){
-      pthread_create(&threads[1], NULL, partial_zeta_sum_stage<2>, (void *) &sum2);    
-      pthread_join(threads[1], NULL);
-      cout.precision(6);
-      if(!closing){	
-	cout << "\rStage 2 : Host " << process_id << " Done";
-	if(tot > 1){
-	  cout << " (" << k << "/" << tot << "). ";
-	}else{
-	  cout << ". "; 
-	}
-	cout << " Sum was: " << (sum2.S)[0] << "                                    " << endl;
-      }
-    }
-#endif
-    
-    if(closing){
-#if HAVE_MPI
-      MPI_Finalize(); 
-#endif
-      exit(0); 
-    }
-    
-    for(int l = 0; l < M; l++) {
-      if(gpus > 0){
-	ReS[l] += (sum2.S)[l].real();
-	ImS[l] += (sum2.S)[l].imag();
-      }
-    }     
-  }
-  
-  
-  
-  // TODO: The dissection here needs to be improved
-  // As the one here induces small losses of precision
-  
-  /* Preparation for stage3 */
-  
-  mpz_sub(len1, end, n3); // len = length of stage3
-  mpz_div_ui(len1, len1, total_cores ); // len = length_of_stage3 / total_cpus
-  
-  mpz_set(start1, len1);  // start1 = length_of_stage3 / total_cpus
-  mpz_mul_ui(start1, start1, offset_cpu ); // start1 = offset_cpu * length_of_stage3 / total gpus
-  mpz_add(start1, start1, n3); // start1 = n3 + offset_gpu * length_stage3 / total_cpus
-  
-  mpz_mul_ui(len1, len1, cpus); // len = cpus * length_of_stage3 / total_cpus
-
-  string filename3 = prepare_string(filename, gpus, number_of_gpu_threads,
-				    cpus, number_of_cpu_threads, total_cores,
-				    total_gpus, start1, len1); 
-    
-  sum_data_t<3> sum3(start1, len1,
-		     t, delta, M, S3, STAGE3_PRECISION, number_of_cpu_threads, 
-		     number_of_gpu_threads, gpus, filename3);
-  
-  pthread_create(&threads[2], NULL, partial_zeta_sum_stage<3>, (void *) &sum3); 
-  
-  /* There is a race condition created by the threads spawned by the threads of partial_zeta_sum */  
-  
-  pthread_join(threads[2], NULL);  
-  cout.precision(6);
-  if(!closing){
-    cout << "\rStage 3 : Host " << process_id << " Done. Sum was: " << (sum3.S)[0] << "                           " << endl;
-  }
-  
-  if(closing){
-#if HAVE_MPI
-    MPI_Finalize(); 
-#endif
-    exit(0); 
-  }
-  
-  // Store the contributions of stages 1, 2 & 3 in S, which is the array passed to partial_zeta_sum.
-  // We first initialize S to zero, then add up the contributions of S1, S2, & S3
-  
-  for(int l = 0; l < M; l++) {
-    ReS[l] += (sum3.S)[l].real();
-    ImS[l] += (sum3.S)[l].imag();
-  }
-  
-#if HAVE_MPI  
   MPI_Reduce(&ReS, &ResultReS, M, MPI_DOUBLE, MPI_SUM, 0,
 	     MPI_COMM_WORLD);
   MPI_Reduce(&ImS, &ResultImS, M, MPI_DOUBLE, MPI_SUM, 0,
 	     MPI_COMM_WORLD);
-  
-  MPI_Barrier(MPI_COMM_WORLD); 
 
-  if(process_id == 0){
-    for(int i = 0; i < M; i++){
-      S[i] = Complex (ResultReS[i], ResultImS[i]); 
-    }
-    
-  }else{
-    MPI_Finalize();
-    exit(0); 
-  }
-#else
-  for(int i = 0; i < M; i++)
-    S[i] = Complex (ReS[i], ImS[i]); 
-#endif
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  closing = 1; 
+
+  usleep(100000);  /* A bit hacky but whatever */
   
-  if(closing){ 
-#if HAVE_MPI
-    MPI_Finalize(); 
-#endif
-    exit(0); }
-  
-#if HAVE_MPI
   MPI_Finalize();
+  
+  if(c.process_id == 0){
+    for(int i = 0; i < M; i++) S[i] = Complex (ResultReS[i], ResultImS[i]);
+  }
+  else
+    exit(0);
+  
+#else
+  
+  for(int i = 0; i < M; i++) S[i] = Complex (ReS[i], ImS[i]); 
+  
 #endif
   
-  mpz_clear(start0);
-  mpz_clear(start1);
-  mpz_clear(len0);
-  mpz_clear(len1); 
-
-  mpz_clear(n2);
-  mpz_clear(n3);
-  mpz_clear(end);
-  mpz_clear(N1);
-  mpz_clear(N2);
-  mpz_clear(N3);
-  
-  delete [] S1;
-  delete [] S2;
-  delete [] S3;
-  
+  free_stage_len(s); 
   
   return S[0]; // return the value of the partial sum at t
 }
 
-struct threadinfo {
-  void * data;
-  int num; 
-};
+static pthread_barrier_t barr[3]; 
 
 template<int stage> void * zeta_sum_thread(void * ti) {
   
@@ -933,7 +890,6 @@ template<int stage> void * zeta_sum_thread(void * ti) {
 #if HAVE_MPI
   int world_rank; 
   MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
-
 #else
   int world_rank = 0;
 #endif
@@ -941,11 +897,11 @@ template<int stage> void * zeta_sum_thread(void * ti) {
   // Assign GPU per thread 
 
   int tid = t->num; 
+
 #if HAVE_CUDA
   if(stage == 2) cudaSetDevice(tid % sum_data->gpus); 
 #endif
  
-
   mpz_t v;
   mpz_init(v);
   
@@ -954,9 +910,10 @@ template<int stage> void * zeta_sum_thread(void * ti) {
   
   // Fetch a stream per thread and initialize it -- it is important
   // to do this after the thread has been assigned to a GPU -- otherwise
-  // we will each stream will be writting to an un-assigned memory address
+  // we will each stream will be w itting to an un-assigned memory address
   // on the wrong GPU
 #if HAVE_CUDA  
+
   int gpus = sum_data->gpus; 
   int id_gpu = tid % gpus; 
   cudaStream_t stream = sum_data->cudaStreams[tid % sum_data->number_of_gpu_threads]; 
@@ -964,13 +921,16 @@ template<int stage> void * zeta_sum_thread(void * ti) {
     cudaStreamCreate(&stream); 
     cudaCheckErrors("couldn't create CUDA streams\n"); 
   }
+
 #endif
 
-  // array where thread output will be stored
-  complex<double> * S = new complex<double>[sum_data->M];
-  
+  Complex * S = (Complex *) t->S; 
+
+  /* ! WARNING ! THis is where the bug was coming from ... */
+
   // initializes S[0], S[1], ... , S[M-1] to zero
-  for(int l = 0; l < sum_data->M; l++) S[l] = 0;
+  //  if(!is_file_exist((sum_data->hash)(tid,0,"S")))
+  //   for(int l = 0; l < sum_data->M; l++) S[l] = 0;
   
   // array where the auxilliary coefficients in the linear combination of quadratic 
   // sums is stored (however, it doesn't seem this needs to be called each time since
@@ -982,6 +942,7 @@ template<int stage> void * zeta_sum_thread(void * ti) {
   /* Initialize Host & CUDA buffer */
   
   /* Stage 2 buffers */
+
 #if HAVE_CUDA
   struct precomputation_table * dev_precompute;
   cuDoubleComplex * dev_current_terms;
@@ -990,50 +951,27 @@ template<int stage> void * zeta_sum_thread(void * ti) {
   Complex * host_current_terms;
 #endif
 
-  char processor_name[MPI_MAX_PROCESSOR_NAME];
-  int name_len;
-  MPI_Get_processor_name(processor_name, &name_len);
-  
-  
-  // compute the partial sum in "chunks" 
-  //  int serialize = 1; 
-  string filename = sum_data->filename 
-    + ",file,"
-    + to_string(tid) + ","
-    + processor_name + ","
-    + to_string(stage); 
-    //    + to_string(tid) + "," 
-    //  + to_string(process_id) + "," 
-    // + to_string(stage);  // Adding the tid here would be a mistake
+  int rank;
+  MPI_Comm_rank (MPI_COMM_WORLD, &rank);
 
-  
-  /* The problem here is that the threads are sharing the sum_data structure 
-     thus it shouldn't be written to separate files as it creates a race condition
-     on the other hand the array S is private and should be stored and loaded 
-     separately */
-  
 #if HAVE_CUDA
   long long size = 0;
 #endif
 
-  if(is_file_exist(filename.c_str())){
-    deserialize_local(filename, S, sum_data->M);
-  }else{
-    serialize_local(filename, S, sum_data->M);
-  }
-    
   unsigned long length = sum_data->next_block(v);
-  
+
   while(length != 0) {
-    
     /* Here as we iterate through the loop we could periodically save all the
        data associated to sum_data , this should allow one to resume the program
        if it is interrupted */ 
     
-    if(stage==1) 
+    if(stage==1)
       zeta_block_stage1(v, length, sum_data->t, sum_data->delta, sum_data->M, S);
+
 #if HAVE_CUDA
-    if(stage==2)
+
+    if(stage==2){
+
       size = zeta_block_stage2(v,
 			       length,
 			       sum_data->t,
@@ -1050,38 +988,23 @@ template<int stage> void * zeta_sum_thread(void * ti) {
 			       id_gpu,
 			       sum_data->next_mutex,
 			       size);
+
+    }
 #endif
+    
     if(stage==3) 
       zeta_block_stage3(v, length, sum_data->t, Z, sum_data->delta, sum_data->M, S);
-
-        
-    //    if(size < 3200){
-    //   pthread_mutex_lock(sum_data->next_mutex); 
-    //  sum_data->stage2_max_size = 16000000; 
-    //  pthread_mutex_unlock(sum_data->next_mutex);
-    //   }
-
-    /* This is admitedly a bit hacky */
-    /* This is done so that size never falls below 3200, after which GPU transfers become
-       more expensive */
-
-    // serialize_local(filename, S, sum_data->M); 
-
     
     if(closing){
-      // Do we need to lock the mutex when serializing?
-      pthread_mutex_lock(sum_data->next_mutex); 
-      serialize_local(filename, S, sum_data->M);
-      pthread_mutex_unlock(sum_data->next_mutex); 
-      pthread_exit(NULL); 
-    }    
-
+      break;
+    }
+    
     length = sum_data->next_block(v);
-
-      
+    
   }
 
   /* Free CUDA Buffers */
+
 #if HAVE_CUDA  
   if(stage == 2 && size > 0 ){        
     cudaFree(dev_precompute);
@@ -1095,19 +1018,18 @@ template<int stage> void * zeta_sum_thread(void * ti) {
     
     cudaStreamDestroy(stream);
     cudaCheckErrors("error destroying stream"); 
-
   }
-
 #endif
-  
-  pthread_mutex_lock(sum_data->next_mutex);
-  // Do we need to lock the mutex when serializing ?
-  serialize_local(filename, S, sum_data->M); 
-  sum_data->report(S);  
-  sum_data->serialize(sum_data->filename + ",global," + to_string(stage)); 
-  pthread_mutex_unlock(sum_data->next_mutex);
 
-  mpz_clear(v);
+  sum_data->report(S);
+
+  pthread_mutex_unlock(sum_data->next_mutex);
+  
+  int rc = pthread_barrier_wait(&barr[stage]);
+  if(rc != 0 && rc != PTHREAD_BARRIER_SERIAL_THREAD)
+    printf("WARNING : Could not wait on barrier\n");
+
+  mpz_clear(v); 
   
   pthread_exit(NULL);
 }
@@ -1115,6 +1037,43 @@ template<int stage> void * zeta_sum_thread(void * ti) {
 #if HAVE_CUDA
 extern void allocateTexture();     
 #endif
+
+template<int stage> void * display_thread_main(void * data){
+  sum_data_t<stage> * sum_data = (sum_data_t<stage>*) data;
+
+  int buf; 
+  
+  pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &buf); 
+
+  int sum = 0; 
+  
+  while((sum < sum_data->world*1000) && (closing != 1)){
+
+    sum = 0; 
+    
+    for(int i = 0; i < sum_data->world; i++)
+      sum += sum_data->stats[i];     
+    
+    usleep(10000);
+    
+    //    pthread_mutex_lock(sum_data->next_mutex); 
+    MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
+		MPI_INT, MPI_COMM_WORLD);
+    //pthread_mutex_unlock(sum_data->next_mutex);
+
+    if(sum_data->rank == 0){      
+      cout.precision(1);
+      cout << fixed;
+      cout << "\rS" << stage << ": "; 
+      for(int i = 0; i < sum_data->world; i++)	
+	cout << "H" << i << " (" << ((double) sum_data->stats[i]) / 10 << ") " ;
+      cout << "                   "; 
+      cout.flush();
+    }
+  }
+
+  return NULL;
+}
 
 template<int stage> void * partial_zeta_sum_stage(void * data){
   
@@ -1132,25 +1091,35 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
   // is the value of the partial sum at t.
   //
 
-  sum_data_t<stage> * sum_ptr = (sum_data_t<stage>*) data; 
+#if HAVE_MPI
+  int rank;
+  MPI_Comm_rank (MPI_COMM_WORLD, &rank);
+#else
+  int rank = 0;
+#endif
 
+  sum_data_t<stage> * sum_ptr = (sum_data_t<stage>*) data;
+
+  //  if(is_file_exist(sum_ptr->hash(0,rank,"finished"))){
+  //  (*sum_ptr).load_output(sum_ptr->hash(0,rank,"finished"));
+  //  return NULL;
+  //}
+  
   mpz_t len;
   mpz_init(len);
-  mpz_set_d(len, sum_ptr->length); 
-  sum_data_t<stage> sum (sum_ptr->next, len, sum_ptr->t, sum_ptr->delta,
-			 sum_ptr->M, sum_ptr->S, sum_ptr->epsilon, sum_ptr->number_of_cpu_threads,
-			 sum_ptr->number_of_gpu_threads, 
-			 sum_ptr->gpus, sum_ptr->filename); 
+  mpz_set_d(len, sum_ptr->length);
   
-  for(int l = 0; l < sum.M; l++) (sum.S)[l] = 0;
-  
-  string filename = sum.filename + ",global," + to_string(stage);
-  
-  if(is_file_exist(filename.c_str())){    
-    sum.deserialize(filename);
-  }else{
-    sum.serialize(filename);
-  }
+  sum_data_t<stage> sum(sum_ptr->next, len, sum_ptr->t, sum_ptr->delta,
+			sum_ptr->M, sum_ptr->S, sum_ptr->epsilon, sum_ptr->number_of_cpu_threads,
+			sum_ptr->number_of_gpu_threads, 
+			sum_ptr->gpus); 
+
+  // Second zero should be replaced by processor id ? */
+
+  if(is_file_exist(sum_ptr->hash(0,rank,"sum")))
+    sum.deserialize(sum_ptr->hash(0,rank,"sum"));
+  else
+    for(int l = 0; l < sum.M; l++) (sum.S)[l] = 0;
   
   int number_of_cpu_threads = sum.number_of_cpu_threads;
   
@@ -1158,31 +1127,68 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
   
   if(stage == 1 || stage == 3)
     number_of_threads = number_of_cpu_threads; 
+
 #if HAVE_CUDA
   int number_of_gpu_threads = sum.number_of_gpu_threads; 
   if(stage == 2)
     number_of_threads = number_of_gpu_threads; 
 #endif
+  
   pthread_t threads[number_of_threads];
   
-  struct threadinfo ti [number_of_threads]; 
+  struct threadinfo * ti = (struct threadinfo *) malloc(number_of_threads*sizeof(struct threadinfo)); 
   
+  if(pthread_barrier_init(&barr[stage], NULL, number_of_threads))
+    printf("WARNING : Could not create a barrier\n");
+
+  /* Open file with serialized data */
+  
+  ifstream in;
+  if(is_file_exist(sum_ptr->hash(0,rank,"S")))
+    in.open(sum_ptr->hash(0,rank,"S"), std::ios::binary);
+
   for(int n = 0; n < number_of_threads; ++n) {
     ti[n].num = n;
-    ti[n].data = (void *) &sum; 
+    ti[n].data = (void *) &sum;
+    ti[n].S = (Complex *) malloc(sum_ptr->M*sizeof(Complex));
+
+    /* Decide if use already computed input */
+    if(is_file_exist(sum_ptr->hash(0,rank,"S")))
+      read_stream(in, ti[n].S, sum_ptr->M);
+    else
+      for(int i = 0; i < sum_ptr->M; i++) ti[n].S[i] = 0;
+  }
+  
+  in.close();
+
+  pthread_t display_thread; 
+  pthread_create(&display_thread, NULL, display_thread_main<stage>, (void *) &sum); 
+  pthread_detach(display_thread); 
+  
+  for(int n = 0; n < number_of_threads; ++n)
     pthread_create(&threads[n], NULL, zeta_sum_thread<stage>, (void *) &ti[n]);
-  }
-  
-  for(int n = 0; n < number_of_threads; ++n) {
+
+  for(int n = 0; n < number_of_threads; ++n)
     pthread_join(threads[n], NULL);
-  }
+
+  /* Record output */
+
+  /* Could it be that the problem is here?? */
   
-  if(closing){
-    pthread_mutex_lock(sum.next_mutex); 
-    (sum.serialize)(filename);
-    pthread_mutex_unlock(sum.next_mutex);  
+  //  if(mpz_cmp(sum.next, sum.end) == 0){
+  //  sum.record_output(sum_ptr->hash(0,rank,"finished")); 
+  //    remove((sum_ptr->hash(0,rank,"S")).c_str());
+  // remove((sum_ptr->hash(0,rank,"sum")).c_str());
+  //}else{
+  {
+    sum.serialize(sum_ptr->hash(0,rank,"sum"));
+    ofstream out;
+    out.open(sum_ptr->hash(0,rank,"S"),std::ios::binary);
+    for(int n = 0; n < number_of_threads; n++)
+      write_stream(out, ti[n].S, sum_ptr->M);    
+    out.close();
   }
-  
+
   return NULL; 
 
 }

@@ -1,2 +1,4 @@
 Code seems not so efficient if N (that is M) is taken relatively large.
-Why is that happening? 
+Why is that happening? There is the remaining problem that when I run the computation on MPI and only the process 0 remains and performs a computation then interrupting that computation results in it not being serialized.
+This is a rather weird bug that seems to be somehow related to MPI_Bcast in the signal handler. 
+Remove the S files after we are done with all the computations...

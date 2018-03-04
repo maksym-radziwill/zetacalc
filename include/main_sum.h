@@ -5,6 +5,10 @@
 #endif
 #include <string>
 
+#if HAVE_MPI
+#include <mpi.h>
+#endif
+
 #define STAGE2_PRECISION (Double) exp(-40.0)
 #define STAGE3_PRECISION (Double) exp(-10.0)
 
@@ -42,7 +46,7 @@ void compute_Z_from_rs_sum(mpfr_t t0, double delta, int N, Complex * S, Complex 
 // only concerned with the _main sum_ here, and not yet with computing zeta. 
 
 
-Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, double & delta, int & M, Complex * S, int Kmin, int number_of_threads, int number_of_gpu_threads, int gpus=1, std::string filename = "");
+Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, double & delta, int & M, Complex * S, int Kmin, int number_of_threads, int number_of_gpu_threads, pthread_t thread, int gpus=1, std::string filename = "");
 
 Complex zeta_block_stage1(mpz_t v, unsigned int K, mpfr_t t, Double delta, int M, Complex * S);
 /* The Complex return value was never used */
@@ -62,3 +66,5 @@ unsigned int stage_2_block_size(Double v, Double t);
 unsigned int stage_3_block_size(Double v, Double t);
 
 void compute_taylor_coefficients(mpfr_t t, Complex Z[30]);
+
+

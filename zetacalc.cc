@@ -17,6 +17,7 @@
 #include <string>
 #include <cstring>
 #include <thread>
+#include <unistd.h>
 
 #if HAVE_CUDA
 #include "gpu.h"
@@ -249,25 +250,7 @@ int main(int argc, char * argv[]) {
     usage(argv[0]); 
   }
   
-#if HAVE_MPI
- 
-  int process_id = 0; 
- 
-  cout << "\rStarting MPI ... ";
-  MPI_Init(&argc, &argv);
-  MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
-  
-  if(process_id == 0)
-  cout << "done\n"; 
-#endif
-  
-  if(process_id == 0)
-    cout << number_of_cpu_threads << " CPU threads per host, " 
-	 << number_of_gpu_threads << " GPU threads per host" << endl;
-
-
   // Set-up serializing
-
 
   if(checkRH){
     
@@ -333,14 +316,35 @@ int main(int argc, char * argv[]) {
     
   }
   
-  partial_zeta_sum(start, length, t, delta, N, S, Kmin, 
-		   number_of_cpu_threads, number_of_gpu_threads, gpus, filename2);
+#if HAVE_MPI
+  
+  int process_id = 0; 
+  
+  cout << "\rStarting MPI ... ";
+  MPI_Init(&argc, &argv);
+  MPI_Comm_rank(MPI_COMM_WORLD, &process_id);
+  
+  if(process_id == 0)
+    cout << "done\n"; 
+#endif
+  
+  if(process_id == 0)
+    cout << number_of_cpu_threads << " CPU threads per host, " 
+	 << number_of_gpu_threads << " GPU threads per host" << endl;
 
+  // Delete the pthread from partial_zeta_sum
+  
+  pthread_t thread; 
+
+  partial_zeta_sum(start, length, t, delta, N, S, Kmin, 
+		   number_of_cpu_threads, number_of_gpu_threads, thread, gpus, filename2);
 
   int delta_prec = 2 + max((int) (log(1/delta) / log(10)),0); 
   
-    cout << fixed;
-    
+  cout << fixed;
+
+  
+  
   ofstream output_file;
   
   if(output_filename != ""){
@@ -353,7 +357,7 @@ int main(int argc, char * argv[]) {
   
   mpfr_exp_t r; 
   char * t_str = mpfr_get_str(NULL, &r, 10, 50, t, MPFR_RNDN); 
-
+  
   outFile << "t = ";
   for(int i = 0; i < r; i++) outFile << t_str[i]; 
   outFile << "."; 
@@ -395,8 +399,8 @@ int main(int argc, char * argv[]) {
   
   
   delete [] S;
-  
-  
+
+  //  MPI_Finalize();
   
   return 0;
 }

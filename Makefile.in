@@ -64,14 +64,16 @@ MAIN_SUM_OBJECTS = \
 		   main_sum/stage1.o \
 		   main_sum/stage2.o \
 		   main_sum/stage2_gpu.o \
-		   main_sum/stage3.o
+		   main_sum/stage3.o \
+		   main_sum/md5.o
 else
 MAIN_SUM_OBJECTS = \
 		   main_sum/main_sum.o \
 		   main_sum/ms_misc.o \
 		   main_sum/stage1.o \
 		   main_sum/stage2.o \
-		   main_sum/stage3.o
+		   main_sum/stage3.o \
+	           main_sum/md5.o
 endif
 
 OTHER_OBJECTS = \
@@ -102,7 +104,7 @@ main_sum/stage2_gpu.o : main_sum/stage2_gpu.cu
 endif
 
 $(THETA_SUM_OBJECTS): include/theta_sums.h include/log.h include/misc.h theta_sums/precomputed_tables.h
-$(MAIN_SUM_OBJECTS): include/theta_sums.h include/log.h include/main_sum.h include/misc.h theta_sums/precomputed_tables.h
+$(MAIN_SUM_OBJECTS): include/theta_sums.h include/log.h include/main_sum.h include/misc.h theta_sums/precomputed_tables.h include/md5.h
 log/log.o: include/log.h
 
 theta_sums/H_functions.o: theta_sums/H_functions.cc
