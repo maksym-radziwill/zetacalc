@@ -57,6 +57,7 @@ typedef std::mt19937 RNG;
 
 static int closing = 0; 
 static int end_display = 0;
+static int thread_off = 0;
 
 bool is_file_exist(string fileName)
 {
@@ -870,7 +871,7 @@ Complex partial_zeta_sum(mpz_t start, mpz_t length, mpfr_t t, Double & delta, in
 #if HAVE_MPI
   closing = 1; 
 
-  usleep(100000);  /* A bit hacky but whatever */
+  //  usleep(100000);  /* A bit hacky but whatever */
   
   MPI_Finalize();
 
@@ -1063,18 +1064,14 @@ template<int stage> void * display_thread_main(void * data){
   
   pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, &buf); 
 
-  int sum = 0;   
-  while(sum < sum_data->world*1000 && (closing != 1)){
-    sum = 0; 
-    
-    for(int i = 0; i < sum_data->world; i++)
-      sum += sum_data->stats[i];     
-    
-    usleep(10000);
+  while(thread_off != 1){
 
+    usleep(10000);
+    
 #if HAVE_MPI
-    MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
-	       MPI_INT, MPI_COMM_WORLD);
+    //   MPI_Barrier(MPI_COMM_WORLD);
+    MPI_Gather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
+		MPI_INT,0, MPI_COMM_WORLD);
 #else
     sum_data->stats[0] = sum_data->percent_finished;
 #endif
@@ -1090,6 +1087,13 @@ template<int stage> void * display_thread_main(void * data){
     }
   }
 
+  
+  
+  //  MPI_Allgather(&(sum_data->percent_finished), 1, MPI_INT, sum_data->stats, 1,
+  //		MPI_INT, MPI_COMM_WORLD);
+  
+  //  MPI_Barrier(MPI_COMM_WORLD);
+  
   return NULL;
 }
 
@@ -1188,10 +1192,8 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
 
   for(int n = 0; n < number_of_threads; ++n)
     pthread_join(threads[n], NULL);
-
-
-  //  pthread_cancel(display_thread); 
-  //pthread_join(display_thread, NULL);
+  
+  //  thread_off = 1; 
 
   /* Record output */
 
@@ -1211,6 +1213,10 @@ template<int stage> void * partial_zeta_sum_stage(void * data){
     out.close();
   }
 
+  MPI_Barrier(MPI_COMM_WORLD);
+
+  pthread_cancel(display_thread);
+  
   return NULL; 
 
 }
