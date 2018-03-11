@@ -85,7 +85,9 @@ void stage_2_start(mpz_t v, mpfr_t t) {
      the CPU but maybe that is... stupid ? */
   
   stage_3_start(v,t);
-  mpz_div_ui(v, v,500000);
+  mpz_div_ui(v, v,100000); // One can play with this
+  // There is a trade-off : a longer stage1 means that stage2 is better
+  // spread out among hosts in stage2 when using MPI
 
   if(mpz_cmp_ui(v,1100000) < 0) mpz_set_ui(v, 1100000); 
 
