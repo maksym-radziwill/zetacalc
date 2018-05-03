@@ -85,9 +85,10 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   
   /* Could also introduce a stage1.5 where we do the GPU computation on
      the CPU but maybe that is... stupid ? */
-  
-  stage_3_start(v,t);
-  mpz_div_ui(v, v,100000); // One can play with this
+
+  // The commented out snippet might perform better in a MPI setting
+  //  stage_3_start(v,t);
+  //  mpz_div_ui(v, v,100000); // One can play with this
   // There is a trade-off : a longer stage1 means that stage2 is better
   // spread out among hosts in stage2 when using MPI
 
