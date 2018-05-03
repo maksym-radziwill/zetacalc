@@ -81,6 +81,8 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   // can if v is too small).
   //
 
+  
+  
   /* Could also introduce a stage1.5 where we do the GPU computation on
      the CPU but maybe that is... stupid ? */
   
@@ -89,8 +91,16 @@ void stage_2_start(mpz_t v, mpfr_t t) {
   // There is a trade-off : a longer stage1 means that stage2 is better
   // spread out among hosts in stage2 when using MPI
 
+  mpfr_t x;
+  mpfr_init2(x,mpfr_get_prec(t));
+  mpfr_root(x, t, 4,GMP_RNDN);
+  mpfr_mul_ui(x,x,3u,GMP_RNDN);
+  mpfr_get_z(v, x, GMP_RNDN);
+  
   if(mpz_cmp_ui(v,1100000) < 0) mpz_set_ui(v, 1100000); 
 
+  mpfr_clear(x);
+  
   return; 
 
 }
